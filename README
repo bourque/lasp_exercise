@@ -1,0 +1,137 @@
+
+***** Background:
+This data is similar to the SORCE SOLSTICE instrument measurements (though it is a small subset of the
+wavelength range). The SORCE mission ended in February 2020 after 17 years of on-orbit operations.
+The SORCE mission measured Solar Irradiance variability over almost 2 complete 11-years Solar cycle.
+
+The SOLSTICE instrument measured the daily Solar Irradiance spectra (Watts/nm/m^2) in the ultra-violet (from 115nm to 300nm). 
+Light entered the aperture, followed the optical path, was dispersed by a grating, then landed on a photomultiplier 
+tube (PMT) detector which counted the number of photon events detected per integration time (count rate). 
+As the grating rotated, the wavelength of light hitting the pmt changed, allowing for the photon counts as a function
+of wavelength. 
+
+The SORCE spacecraft was in an orbit with roughly a ninety minute period in Lower Earth Orbit (LEO). Later in the mission,
+the instrument saw larger than designed temperature swing within each orbit. As the PMT's efficiency in detecting photons 
+changes with temperature, a temperature correction needs to be applied.
+
+Also, during that time period,the grating position was reset with each orbit and never returned to the exact fiducial. 
+This created a small grating offset from orbit to orbit, from what was actually reported, resulting in a wavelength shift.
+The provided reference spectra (with well known wavelength and expected irradiances) could be used to align each dataset.
+
+The SOLSTICE instrument ran various experiments on a daily basis throughout the mission. The included data 
+covers about five orbits, with different experiments on each orbit. The various grating scans in this dataset correspond to
+actual Solar measurements around the Silicon-2 emission lines (~180nm). All the data provided is time-tagged and  subset of
+the activities are defined in the file plans.txt
+
+
+Over this time period, it is reasonable to assume that there were no measurable solar variability for this wavelength range.
+
+**********************************************************************************************************************
+***** Task:
+Please calculate the irradiance in watts/nm/m^2 for the UpScan and DownScan and compare the results. 
+Provide plots of your results along with your code. 
+Specifically, plot the Irradiance as a function of Wavelength around the two emission lines at ~180nm [180 to 183nm]. 
+Also, calculate and plot the ratio of the Irradiances at each wavelength for each scan with respect to the reference spectrum. i
+
+What are your thoughts? Use any language you are comfortable with.
+
+Submit your code, plots and discussion about your process, results and how they compare to the reference spectra.
+******
+**********************************************************************************************************************
+
+***** Equations
+
+The microsecondsSinceGpsEpoch column is the default time stamp for the telemetry coming from the
+spacecraft and corresponds to the number of  micro-seconds since 1980-01-06 00:00:00.000.
+
+ * Wavelength (the grating equation) : 
+    offset = 239532.38
+    stepSize = 2.4237772022101214E-6 [rad]
+    d = 277.77777777777777 [nm]
+    phiGInRads = 0.08503244115716374 [rad]
+    ang1 = (offset - gratingPosition) * stepSize
+    wavelength = 2 * d * sin(ang1) * cos(phiGInRads / 2.0) [nm]
+ 
+ * counts/second/area : 
+    integrationTime -> convert to seconds from milli-seconds
+    count_rate = counts / integrationTime [counts / sec / nm] (the per nm is from the sampling at the specific grating position)
+    #
+    # The sensitivity of the detector changes with temperature and a small correction is needed.  This is a correction
+    # to the count_rate as it deviates from the nominal temperaturee of 20.0C at the time of the measurement.
+    # 
+    detectorTemperatureCorr = 0.0061628
+    count_rate_corr = count_rate * (1.0 + detectorTemperatureCorr * (20.0 - detectorTemp))
+    dark_count_rate = dark_counts / dark_integrationTime 
+    median_dark_count_rate = median(dark_count_rate * ( 1.0 + detectorTemperatureCorr * ( 20.0 - detectorTemp)))
+    aperture_Area = .01 / (1E2 * 1E2) [m^2] (aperature area)
+    photonsPerSecondPerM2 = (count_rate_corr - median_dark_count_rate) / aperture_Area  [photons/sec/m^2/nm] 
+    
+ * watts/meter^2/nm
+    wavelengthInMeters -> convert to meters from nm
+    h = 6.62606957E-34 [J*s]
+    c = 299792458.0 [m/s]
+    energyPerPhoton = h * c / wavelengthInMeters [J]
+    wattsPerM2 = photonsPerSecondPerM2 * energyPerPhoton [watts/m^2/nm]
+ 
+ * It is typical to provide the Solar Irradiances as it would be measured from a standard distance from the SUN
+   (remember these are Watts/nm per meter^2 of surface area).  The standard distance is the average distance between 
+   the Earth and the SUN over a full orbit (1 year) known as one Astronomical Unit (AU).
+ 
+    wattsPerM2_1AU = wattsPerM2 / sunObserverDistanceCorrection   [watts/m^2/nm]
+ 
+***** Files
+All files are comma separated with a one line header.
+
+  * detectorTemp.txt : in degrees Celsius. It is roughly sampled at 1 second.
+  * distanceAndDoppler.txt : These are the corrections used to adjust for the changing
+    distance and velocity of the spacecraft relative to the sun.
+  * instrumentTelemetry.txt : Includes grating position and measured detector counts. The detector counts correspond 
+    to the number of photons detected within the currently set integrationTime (in milli-seconds).     
+  * integrationTime.txt : This is the currently set integration time (mlli-seconds) of the instrument. These are sampled 
+    at a different cadence than the instrumentTelemetry. Assume the value is constant until there is a new value.
+  * plans.txt : This file includes the experiment names with start/end times. You can find the 
+    time ranges of the plans of interest here. [startTime, endTime]
+  * referenceSpectrum.txt : This is a reference spectrum with accurate wavelengths. The current
+    irradiance measurements will be within 15% of this spectrum.
+ 
+***** Notes
+
+The ConstantWavelength experiment has the grating fixed in one position mesuring the same wavelength
+the whole time.  Any changes in the measured counts can be attributed to changes in the detector temperature.
+The temperature correction is typically measured as a fractional change in count_rate per degree from a reference
+temperature (20.0C)
+
+corrected_rate = count_rate * (1 + corrFactor * (referenceTemp - detectorTemp))
+
+where corrFactor = 0.0061628
+
+Although small (~0.6%/C), this correction should be applied to both the count_rate and dark_count_rate before 
+calculating the photonsPerSecondPerM2
+
+
+
+******************  Expectations:
+
+ With this coding test, we're trying to get a sense of:
+
+    i) Presentation/documentation/communication skills 
+   ii) Coding style and code usability 
+  iii) Programming language best practices 
+   iv) Physical/instrumentation knowledge 
+    v) Ability to learn on the fly and apply background knowledge 
+
+
+****   Asking questions via email is expected. 
+****   We are not trying to hide information and understand you are not an expert with this dataset. 
+
+Consulting external resources is acceptable though asking us directly is the easiest way to clarify questions. 
+All your submitted material must be your own work. 
+
+We expect a summary/report of your results, including plots where appropriate 
+
+Include some technical discussion of what worked, what didn’t, and how you approached the problem 
+
+This is a real world problem with no perfect solution. Use this as an opportunity to showcase your skills. 
+Getting the “right answer” is not the focus of this exercise. 
+
+
