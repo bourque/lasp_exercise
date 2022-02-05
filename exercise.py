@@ -1,10 +1,10 @@
 """
 To do:
     - Calculate and plot the ratio of the Irradiances at each wavelength for each scan with respect to the reference spectrum
-    - Fix/implement remaining corrections
     - Write unit tests
     - Implement CI
     - PEP8 changes
+    - Shorten some long lines of code
     - Document possible improvements
     - Write README and/or report
 """
@@ -23,6 +23,7 @@ class IrradianceExercise():
     """Main class for completing the exercise"""
 
     def __init__(self):
+        """Initializes a IrradianceExercise class object"""
 
         # Set some constant values
         self.aperture_Area = .01 / (1E2 * 1E2)  # [m^2]
@@ -54,32 +55,44 @@ class IrradianceExercise():
 
         return converted_times
 
-    def _find_closest_temperature(self, data_to_match, temperature_data):
-        """Convenience method to find detector temperature values that
-        correspond to the given data's time measurements.
+    def _find_closest_measurements(self, data_to_match, data_to_search, data_type):
+        """Convenience method to find measurements (e.g. detector
+        temperatures, distance corrections) that correspond to the
+        given data's time measurements.
 
-        The detector temperature values are sampled at a slightly
-        different cadence than other data (e.g. grating positions).
-        This method will return a list of temperature values that
-        match to the given 'data' as close as possible in time.
+        The detector temperature and distance correction values are
+        sampled at a different cadence than other data (e.g. grating
+        positions). This method will return a list of measurement
+        values that match to the given 'data' as close as possible in
+        time.
+
+        Currently, thjis function only supports searching over detector
+        temperature and distance correction data.
 
         Parameters
         ----------
         data_to_match : pandas.core.frame.DataFrame object
-            The data from which to find the closes temperature data
-            in time
-        temperature_data : pandas.core.frame.DataFrame object
-            The temperature data to match
+            The data from which to find the closest values in time
+        data_to_search : pandas.core.frame.DataFrame object
+            The data to search over (e.g. detector temperatures)
+        data_type : str
+            The type of data to search over.  Currently only
+            'temperature' and 'distance_correction' are supported.
+
+        Returns
+        -------
+        matched_values : np.array object
+            The matched temperature values
         """
 
         matched_values = []
         for index, row in data_to_match.iterrows():
             time_to_match = row['time']
-            matched_index = np.argmin(np.abs(temperature_data['time'].values - time_to_match))
-            matched_value = temperature_data['temperature'].values[matched_index]
+            matched_index = np.argmin(np.abs(data_to_search['time'].values - time_to_match))
+            matched_value = data_to_search[data_type].values[matched_index]
             matched_values.append(matched_value)
 
-        return matched_values
+        return np.array(matched_values)
 
     def _indicate_experiments(self, plot):
         """Given a bokeh plot, add a shaded region that indicate the
@@ -224,12 +237,11 @@ class IrradianceExercise():
             detectorTemperatureCorr = 0.0061628
         """
 
-        temperatures_downscan = self.data.temperature_data_downscan['temperature'].values
-        temperatures_upscan = self.data.temperature_data_upscan['temperature'].values
+        # Find detector temperature measurements closest in time with grading position data
+        matched_temperatures_downscan = self._find_closest_measurements(self.data.grating_data_downscan, self.data.temperature_data_downscan, 'temperature')
+        matched_temperatures_upscan = self._find_closest_measurements(self.data.grating_data_upscan, self.data.temperature_data_upscan, 'temperature')
 
-        matched_temperatures_downscan = self._find_closest_temperature(self.data.grating_data_downscan, self.data.temperature_data_downscan)
-        matched_temperatures_upscan = self._find_closest_temperature(self.data.grating_data_upscan, self.data.temperature_data_upscan)
-
+        # Apply temperature correction
         count_rate_corr_downscan = self.results.count_rates_downscan * (1.0 + self.detectorTemperatureCorr * (20.0 - np.array(matched_temperatures_downscan)))
         count_rate_corr_upscan = self.results.count_rates_upscan * (1.0 + self.detectorTemperatureCorr * (20.0 - np.array(matched_temperatures_upscan)))
 
@@ -248,19 +260,19 @@ class IrradianceExercise():
             detectorTemperatureCorr = 0.0061628
         """
 
+        # Calculate dark count rates
         dark_counts = self.data.grating_data_dark['counts'].values
         dark_integration_times = self.data.integration_data_dark['integration_time'].values
-        dark_temperatures = self.data.temperature_data_dark['temperature'].values
-
         dark_count_rates = dark_counts / dark_integration_times
 
-        # temp fix to get around indices problems
-        dark_count_rates = dark_count_rates[0:-1]
-        median_dark_count_rate = np.median(dark_count_rates * (1.0 + self.detectorTemperatureCorr * (20.0 - dark_temperatures)))
-        #median_dark_count_rates = [np.median(dark_count_rate * (1.0 + self.detectorTemperatureCorr * (20.0 - temp))) for dark_count_rate, temp in zip(dark_count_rates, dark_temperatures)]
+        # Find detector temperature measurements closest in time with grating position data
+        matched_temperatures_dark = self._find_closest_measurements(self.data.grating_data_dark, self.data.temperature_data_dark, 'temperature')
+
+        # Apply temperature correction
+        median_dark_count_rate = np.median(dark_count_rates * (1.0 + self.detectorTemperatureCorr * (20.0 - np.array(matched_temperatures_dark))))
 
         # Store results for later use in plotting
-        self.results.median_dark_count_rate = median_dark_count_rate  # counts/sec/nm
+        self.results.median_dark_count_rate = median_dark_count_rate
 
     def calculate_photonsPerSecondPerM2(self):
         """Calculate the number of photons per second per square meter:
@@ -271,12 +283,10 @@ class IrradianceExercise():
             aperture_Area = .01 / (1E2 * 1E2) [m^2]
         """
 
+        # Calculate photons/s/m^2
         aperture_area = .01 / (1E2 * 1E2)
         photonsPerSecondPerM2_downscan = (self.results.count_rate_corr_downscan - self.results.median_dark_count_rate) / aperture_area
         photonsPerSecondPerM2_upscan = (self.results.count_rate_corr_upscan - self.results.median_dark_count_rate) / aperture_area
-
-        # units issue?
-        # counts/sec/m / m^2
 
         # Store results for later use in plotting
         self.results.photonsPerSecondPerM2_downscan = photonsPerSecondPerM2_downscan
@@ -292,13 +302,21 @@ class IrradianceExercise():
             sunObserverDistanceCorrection is (something)
         """
 
-        self.wattsPerM2_downscan = self.results.photonsPerSecondPerM2_downscan * self.results.energyPerPhotons_downscan
-        self.wattsPerM2_upscan = self.results.photonsPerSecondPerM2_upscan * self.results.energyPerPhotons_upscan
+        # Calculate watts/m^2
+        wattsPerM2_downscan = self.results.photonsPerSecondPerM2_downscan * self.results.energyPerPhotons_downscan
+        wattsPerM2_upscan = self.results.photonsPerSecondPerM2_upscan * self.results.energyPerPhotons_upscan
 
-        # Interpolate distance correction
-        #irradiance_downscan = wattsPerM2_downscan / self.data.distance_data_downscan['distance_correction'].values
-        #irradiance_upscan = wattsPerM2_upscan / self.data.distance_data_upscan['distance_correction'].values
+        # Find distance correction measurements closest in time with grating position data
+        matched_distances_downscan = self._find_closest_measurements(self.data.grating_data_downscan, self.data.distance_data_downscan, 'distance_correction')
+        matched_distances_upscan = self._find_closest_measurements(self.data.grating_data_upscan, self.data.distance_data_upscan, 'distance_correction')
 
+        # Calculate irradiance
+        irradiance_downscan = wattsPerM2_downscan / matched_distances_downscan
+        irradiance_upscan = wattsPerM2_upscan / matched_distances_upscan
+
+        # Store results for later use in plotting
+        self.results.irradiance_downscan = irradiance_downscan
+        self.results.irradiance_upscan = irradiance_upscan
 
     def make_plots_raw_data(self):
         """Create a grid of bokeh plots displaying the raw data from
@@ -354,12 +372,13 @@ class IrradianceExercise():
 
         # Plot irradiance near ~180nm emission lines
         p = figure(title="WattsPerM2", x_axis_label='Wavelength', y_axis_label='WattsPerM2', x_range=(180, 183))
-        p.line(self.results.wavelengths_downscan, self.wattsPerM2_downscan, line_width=2, color='green', legend_label='Downscan')
-        p.line(self.results.wavelengths_upscan, self.wattsPerM2_upscan, line_width=2, color='red', legend_label='Upscan')
+        p.line(self.results.wavelengths_downscan, self.results.irradiance_downscan, line_width=2, color='green', legend_label='Downscan')
+        p.line(self.results.wavelengths_upscan, self.results.irradiance_upscan, line_width=2, color='red', legend_label='Upscan')
         p.line(self.data.reference_spectrum_data['wavelength'], self.data.reference_spectrum_data['irradiance'], line_width=2, line_color='black', legend_label='Reference')
         show(p)
         output_file(filename='plots/irradiance.html')
         save(p)
+
 
         # # Get reference spectrum data over downscan wavelength range
         # wavelength_start, wavelength_end = min(self.results.wavelengths_downscan), max(self.results.wavelengths_downscan)
@@ -368,13 +387,13 @@ class IrradianceExercise():
         #     (self.data.reference_spectrum_data['wavelength'] >= wavelength_start) &
         #     (self.data.reference_spectrum_data['wavelength'] <= wavelength_end)]
         # print(reference)
-        # print(self.results.wavelengths_downscan)
+        # print(len(self.results.wavelengths_downscan))
 
-        # print(self.wattsPerM2_downscan)
+        # print(wattsPerM2_downscan)
         # print(self.results.wavelengths_downscan)
         # print(self.data.reference_spectrum_data['irradiance'])
         # # Plot irradiance ratio w.r.t. reference
-        # downscan_ratio = self.wattsPerM2_downscan / self.data.reference_spectrum_data['irrandiance']
+        # downscan_ratio = wattsPerM2_downscan / self.data.reference_spectrum_data['irrandiance']
         # p = figure(title="WattsPerM2", x_axis_label='Wavelength', y_axis_label='WattsPerM2')
 
 
