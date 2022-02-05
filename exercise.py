@@ -1,20 +1,36 @@
 """This module contains software for completing the LASP coding
 exercise.  The goal of the exercise is to calculate the measured
-irradience from the SOlar Stellar Irradiance Comparison Experiment
+irradiance from the SOlar Stellar Irradiance Comparison Experiment
 (SOLSTICE).
 
 The main tasks of this exercise are to:
     (1) Calculate the irradiance in watts/nm/m^2 for the UpScan and
         DownScan experiments and compare the results
-    (2) Plot the irradiance as a function of wavelength around two emission
-        lines located at ~180nm
+    (2) Plot the irradiance as a function of wavelength around two
+        emission lines located at ~180nm
     (3) Calculate and plot the ratio of the irradiances at each
         wavelength for each scan with respect to the reference spectrum
+
+After running this code, a 'plots/' directory will be created and
+contain three plots:
+
+    - instrument_data.html : plots the data acquired from the
+      instrument
+    - irradiance.html : plots the measured irradiance of the UpScan and
+      DownScan experiments along with the reference spectrum
+    - irradiance_ratios.html : plots the ratio of the UpScan and
+      DownScan experiements with respect to the reference spectrum
 
 Use
 ---
 
     To perform these calculations and make corresponding plots:
+
+    From the command line:
+
+        python exercise.py
+
+    Or from within a python interpreter:
 
         ie = IrradianceExercise()
         ie.get_data()
@@ -25,23 +41,23 @@ Use
     It is required that a 'data/' directory exists in the working
     directory, and it contains the following data files:
 
-        * detectorTemp.txt : in degrees Celsius. It is roughly sampled
+        - detectorTemp.txt : in degrees Celsius. It is roughly sampled
           at 1 second.
-        * distanceAndDoppler.txt : These are the corrections used to
+        - distanceAndDoppler.txt : These are the corrections used to
           adjust for the changing
           distance and velocity of the spacecraft relative to the sun.
-        * instrumentTelemetry.txt : Includes grating position and
+        - instrumentTelemetry.txt : Includes grating position and
           measured detector counts. The detector counts correspond
           to the number of photons detected within the currently set
           integrationTime (in milli-seconds).
-        * integrationTime.txt : This is the currently set integration
+        - integrationTime.txt : This is the currently set integration
           time (mlli-seconds) of the instrument. These are sampled
           at a different cadence than the instrumentTelemetry. Assume
           the value is constant until there is a new value.
-        * plans.txt : This file includes the experiment names with
+        - plans.txt : This file includes the experiment names with
           start/end times. You can find the
           time ranges of the plans of interest here.
-        * referenceSpectrum.txt : This is a reference spectrum with
+        - referenceSpectrum.txt : This is a reference spectrum with
           accurate wavelengths. The current irradiance measurements
           will be within 15% of this spectrum.
 
@@ -62,7 +78,7 @@ from collections import namedtuple
 import datetime
 
 from bokeh.layouts import gridplot
-from bokeh.models import BoxAnnotation
+from bokeh.models import BoxAnnotation, NumeralTickFormatter
 from bokeh.plotting import figure, output_file, save
 import numpy as np
 import pandas
@@ -109,14 +125,14 @@ class IrradianceExercise():
         temperatures, distance corrections) that correspond to the
         given data's time measurements.
 
-        The detector temperature and distance correction values are
-        sampled at a different cadence than other data (e.g. grating
+        The detector temperature and distance/doppler correction values
+        are sampled at a different cadence than other data (e.g. grating
         positions). This method will return a list of measurement
         values that match to the given 'data' as close as possible in
         time.
 
-        Currently, thjis function only supports searching over detector
-        temperature and distance correction data.
+        Currently, this function only supports searching over detector
+        temperature and distance/doppler correction data.
 
         Parameters
         ----------
@@ -126,7 +142,8 @@ class IrradianceExercise():
             The data to search over (e.g. detector temperatures)
         data_type : str
             The type of data to search over.  Currently only
-            'temperature' and 'distance_correction' are supported.
+            'temperature', 'distance_correction', and 'doppler_factor'
+            are supported.
 
         Returns
         -------
@@ -173,7 +190,7 @@ class IrradianceExercise():
         """
 
         # Convert integration times from milliseconds to seconds
-        # Also simplyfy it down to one value since it is constant throughout the experiement
+        # Also simplify it down to one value since it is constant throughout the experiment
         integration_time_downscan_s = [time * 0.001 for time in self.data.integration_data_downscan['integration_time']][0]
         integration_time_upscan_s = [time * 0.001 for time in self.data.integration_data_upscan['integration_time']][0]
 
@@ -210,7 +227,7 @@ class IrradianceExercise():
         self.results.count_rate_corr_downscan = count_rate_corr_downscan
         self.results.count_rate_corr_upscan = count_rate_corr_upscan
 
-    def calculate_energyPerPhoton(self):
+    def calculate_energy_per_photon(self):
         """Calculate the energy per photon:
 
         energyPerPhotons = h * c / wavelength [J]
@@ -239,13 +256,13 @@ class IrradianceExercise():
         wattsPerM2_1AU = wattsPerM2 / sunObserverDistanceCorrection
 
         where:
-            wattsPerM2 = photonsPerSecondPerM2 * energyPerPhoton
+            wattsPerM2 = photons_per_second_per_m2 * energyPerPhoton
             sunObserverDistanceCorrection is (something)
         """
 
         # Calculate watts/m^2
-        wattsPerM2_downscan = self.results.photonsPerSecondPerM2_downscan * self.results.energyPerPhotons_downscan
-        wattsPerM2_upscan = self.results.photonsPerSecondPerM2_upscan * self.results.energyPerPhotons_upscan
+        wattsPerM2_downscan = self.results.photons_per_second_per_m2_downscan * self.results.energyPerPhotons_downscan
+        wattsPerM2_upscan = self.results.photons_per_second_per_m2_upscan * self.results.energyPerPhotons_upscan
 
         # Find distance correction measurements closest in time with grating position data
         matched_distances_downscan = self._find_closest_measurements(
@@ -288,10 +305,10 @@ class IrradianceExercise():
         # Store results for later use in plotting
         self.results.median_dark_count_rate = median_dark_count_rate
 
-    def calculate_photonsPerSecondPerM2(self):
+    def calculate_photons_per_second_per_m2(self):
         """Calculate the number of photons per second per square meter:
 
-        photonsPerSecondPerM2 = (count_rate_corr - median_dark_count_rate) / aperture_Area  [photons/sec/m^2/nm]
+        photons_per_second_per_m2 = (count_rate_corr - median_dark_count_rate) / aperture_Area  [photons/sec/m^2/nm]
 
         where:
             aperture_Area = .01 / (1E2 * 1E2) [m^2]
@@ -299,14 +316,14 @@ class IrradianceExercise():
 
         # Calculate photons/s/m^2
         aperture_area = .01 / (1E2 * 1E2)
-        photonsPerSecondPerM2_downscan = (
+        photons_per_second_per_m2_downscan = (
             self.results.count_rate_corr_downscan - self.results.median_dark_count_rate) / aperture_area
-        photonsPerSecondPerM2_upscan = (
+        photons_per_second_per_m2_upscan = (
             self.results.count_rate_corr_upscan - self.results.median_dark_count_rate) / aperture_area
 
         # Store results for later use in plotting
-        self.results.photonsPerSecondPerM2_downscan = photonsPerSecondPerM2_downscan
-        self.results.photonsPerSecondPerM2_upscan = photonsPerSecondPerM2_upscan
+        self.results.photons_per_second_per_m2_downscan = photons_per_second_per_m2_downscan
+        self.results.photons_per_second_per_m2_upscan = photons_per_second_per_m2_upscan
 
     def calculate_wavelengths(self):
         """Calculate wavelengths (in nm) from the grating positions via
@@ -320,6 +337,9 @@ class IrradianceExercise():
             phiGInRads = 0.08503244115716374 [rad]
             offset = 239532.38
             stepSize = 2.4237772022101214E-6 [rad]
+
+        A correction is applied to the wavelength to take the changing
+        velocity of the spacecraft account.
         """
 
         # Calculate angle of incidence
@@ -330,6 +350,16 @@ class IrradianceExercise():
         wavelengths_downscan = 2 * self.d * np.sin(angles_downscan) * np.cos(self.phiGInRads / 2.0)
         wavelengths_upscan = 2 * self.d * np.sin(angles_upscan) * np.cos(self.phiGInRads / 2.0)
 
+        # Find doppler correction measurements closest in time with wavelength data
+        matched_doppler_downscan = self._find_closest_measurements(
+            self.data.grating_data_downscan, self.data.distance_data_downscan, 'doppler_factor')
+        matched_doppler_upscan = self._find_closest_measurements(
+            self.data.grating_data_upscan, self.data.distance_data_upscan, 'doppler_factor')
+
+        # Apply correction for doppler factor
+        wavelengths_downscan = wavelengths_downscan / matched_doppler_downscan
+        wavelengths_upscan = wavelengths_upscan / matched_doppler_upscan
+
         # Store results for later use in plotting
         self.results.wavelengths_downscan = wavelengths_downscan
         self.results.wavelengths_upscan = wavelengths_upscan
@@ -337,7 +367,7 @@ class IrradianceExercise():
     def get_data(self):
         """Read in data from input data files and store data within
         class object via a 'data' attribute.  This method also creates
-        other attributes (e.g. experiement start/end times, subsets of
+        other attributes (e.g. experiment start/end times, subsets of
         data for specific experiments, etc.) for convenience in
         calculations and/or plotting.
         """
@@ -366,7 +396,7 @@ class IrradianceExercise():
         self.upscan_start_dt = self.data_collection_start + datetime.timedelta(microseconds=self.upscan_start)
         self.upscan_end_dt = self.data_collection_start + datetime.timedelta(microseconds=self.upscan_end)
 
-        # Set some attriubutes for subsets of data for downscan, dark, and upscan experiments
+        # Set some attributes for subsets of data for downscan, dark, and upscan experiments
         self.data.temperature_data_downscan = self.data.temperature_data[self.data.temperature_data['time'].between(self.downscan_start, self.downscan_end)]
         self.data.temperature_data_dark = self.data.temperature_data[self.data.temperature_data['time'].between(self.dark_start, self.dark_end)]
         self.data.temperature_data_upscan = self.data.temperature_data[self.data.temperature_data['time'].between(self.upscan_start, self.upscan_end)]
@@ -404,6 +434,7 @@ class IrradianceExercise():
         grating_position_plot = figure(title="Grating Position", x_axis_label='Time', x_axis_type='datetime')
         grating_position_plot.line(times_datetime, self.data.grating_data['grating_position'], line_width=2)
         grating_position_plot = self._indicate_experiments(grating_position_plot)
+        grating_position_plot.yaxis[0].formatter = NumeralTickFormatter(format="0")
 
         # Make Counts plot
         counts_plot = figure(title="Counts", x_axis_label='Time', x_axis_type='datetime')
@@ -419,25 +450,30 @@ class IrradianceExercise():
         # Make Reference Spectrum plot
         reference_plot = figure(title="Reference Spectra", x_axis_label='Wavelength (nm)', y_axis_label='Irradiance (watts/m^2/nm)')
         reference_plot.line(self.data.reference_spectrum_data['wavelength'], self.data.reference_spectrum_data['irradiance'], line_width=2)
+        reference_plot.yaxis[0].formatter = NumeralTickFormatter(format="0.000")
 
         # Arrange plots in a grid
         grid = gridplot([[temperature_plot, distance_plot, grating_position_plot],
                          [counts_plot, integration_time_plot, reference_plot]], width=500, height=500)
 
         # Save plot
-        output_file(filename='plots/instrument_data.html')
+        filename = 'plots/instrument_data.html'
+        output_file(filename=filename)
         save(grid)
+        print(f'\tPlot saved to {filename}')
 
     def make_plots_results(self):
         """Create bokeh plots showing results of the exercise"""
 
         # Plot irradiance near ~180nm emission lines
-        p = figure(title="Irradiance at 1AU", x_axis_label='Wavelength', y_axis_label='Irradiance (watts/m^2/nm)', x_range=(180, 183))
+        p = figure(title="Irradiance at 1AU", x_axis_label='Wavelength (nm)', y_axis_label='Irradiance (watts/m^2/nm)', x_range=(180, 183))
         p.line(self.results.wavelengths_downscan, self.results.irradiance_downscan, line_width=2, color='green', legend_label='Downscan')
         p.line(self.results.wavelengths_upscan, self.results.irradiance_upscan, line_width=2, color='red', legend_label='Upscan')
         p.line(self.data.reference_spectrum_data['wavelength'], self.data.reference_spectrum_data['irradiance'], line_width=2, line_color='black', legend_label='Reference')
-        output_file(filename='plots/irradiance.html')
+        filename = 'plots/irradiance.html'
+        output_file(filename=filename)
         save(p)
+        print(f'\tPlot saved to {filename}')
 
         # Find the reference spectrum values that match downscan/upscan wavelengths the closest
         reference_values_downscan, reference_values_upscan = [], []
@@ -456,8 +492,10 @@ class IrradianceExercise():
         p = figure(title="Irradiance Ratio w.r.t. Reference Spectra", x_axis_label='Wavelength (nm)', y_axis_label='Irradiance (watts/m^2/nm)', x_range=(180, 183))
         p.line(self.results.wavelengths_downscan, downscan_ratio, line_width=2, color='green', legend_label='Downscan')
         p.line(self.results.wavelengths_upscan, upscan_ratio, line_width=2, color='red', legend_label='Upscan')
-        output_file(filename='plots/irradiance_ratios.html')
+        filename = 'plots/irradiance_ratios.html'
+        output_file(filename=filename)
         save(p)
+        print(f'\tPlot saved to {filename}')
 
     def run_calculations(self):
         """Main method for running calculations necessary for
@@ -465,11 +503,11 @@ class IrradianceExercise():
         """
 
         self.calculate_wavelengths()
-        self.calculate_energyPerPhoton()
+        self.calculate_energy_per_photon()
         self.calculate_count_rate()
         self.calculate_count_rate_corr()
         self.calculate_median_dark_count_rate()
-        self.calculate_photonsPerSecondPerM2()
+        self.calculate_photons_per_second_per_m2()
         self.calculate_irradiance()
 
 
