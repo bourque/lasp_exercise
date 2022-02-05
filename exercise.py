@@ -1,20 +1,12 @@
 """
-Tasks:
-- Calculate the irradiance in watts/nm/m^2 for the UpScan and DownScan and compare the results
-- Plot the Irradiance as a function of Wavelength around the two emission lines at ~180nm [180 to 183nm]
-- Calculate and plot the ratio of the Irradiances at each wavelength for each scan with respect to the reference spectrum
-- How do the results compare to the reference spectra?
-
 To do:
-    - Make plots for results
+    - Calculate and plot the ratio of the Irradiances at each wavelength for each scan with respect to the reference spectrum
     - Fix/implement remaining corrections
     - Write unit tests
     - Implement CI
     - PEP8 changes
-    - Finalize conda env and/or requirements file
     - Document possible improvements
     - Write README and/or report
-    - Set up PR
 """
 
 from collections import namedtuple
@@ -62,6 +54,49 @@ class IrradianceExercise():
 
         return converted_times
 
+    def _find_closest_temperature(self, data_to_match, temperature_data):
+        """Convenience method to find detector temperature values that
+        correspond to the given data's time measurements.
+
+        The detector temperature values are sampled at a slightly
+        different cadence than other data (e.g. grating positions).
+        This method will return a list of temperature values that
+        match to the given 'data' as close as possible in time.
+
+        Parameters
+        ----------
+        data_to_match : pandas.core.frame.DataFrame object
+            The data from which to find the closes temperature data
+            in time
+        temperature_data : pandas.core.frame.DataFrame object
+            The temperature data to match
+        """
+
+        matched_values = []
+        for index, row in data_to_match.iterrows():
+            time_to_match = row['time']
+            matched_index = np.argmin(np.abs(temperature_data['time'].values - time_to_match))
+            matched_value = temperature_data['temperature'].values[matched_index]
+            matched_values.append(matched_value)
+
+        return matched_values
+
+    def _indicate_experiments(self, plot):
+        """Given a bokeh plot, add a shaded region that indicate the
+        time span of the downscan, dark, and upscan experiments
+
+        Parameters
+        ----------
+        plot : bokeh.plotting.figure object
+            The bokeh plot to add shaded regions to
+        """
+
+        plot.add_layout(BoxAnnotation(left=self.downscan_start_dt, right=self.downscan_end_dt, fill_alpha=0.1, fill_color='green', line_color='green'))
+        plot.add_layout(BoxAnnotation(left=self.dark_start_dt, right=self.dark_end_dt, fill_alpha=0.1, fill_color='gray', line_color='black'))
+        plot.add_layout(BoxAnnotation(left=self.upscan_start_dt, right=self.upscan_end_dt, fill_alpha=0.1, fill_color='red', line_color='red'))
+
+        return plot
+
     def get_data(self):
         """Read in data from input data files and store data within
         class object via a 'data' attribute.  This method also creates
@@ -107,22 +142,6 @@ class IrradianceExercise():
         self.data.integration_data_downscan = self.data.integration_data[self.data.integration_data['time'].between(self.downscan_start, self.downscan_end)]
         self.data.integration_data_dark = self.data.integration_data[self.data.integration_data['time'].between(self.dark_start, self.dark_end)]
         self.data.integration_data_upscan = self.data.integration_data[self.data.integration_data['time'].between(self.upscan_start, self.upscan_end)]
-
-    def _indicate_experiments(self, plot):
-        """Given a bokeh plot, add a shaded region that indicate the
-        time span of the downscan, dark, and upscan experiments
-
-        Parameters
-        ----------
-        plot : bokeh.plotting.figure object
-            The bokeh plot to add shaded regions to
-        """
-
-        plot.add_layout(BoxAnnotation(left=self.downscan_start_dt, right=self.downscan_end_dt, fill_alpha=0.1, fill_color='green', line_color='green'))
-        plot.add_layout(BoxAnnotation(left=self.dark_start_dt, right=self.dark_end_dt, fill_alpha=0.1, fill_color='gray', line_color='black'))
-        plot.add_layout(BoxAnnotation(left=self.upscan_start_dt, right=self.upscan_end_dt, fill_alpha=0.1, fill_color='red', line_color='red'))
-
-        return plot
 
     def calculate_wavelengths(self):
         """Calculate wavelengths (in nm) from the grating positions via
@@ -197,8 +216,7 @@ class IrradianceExercise():
         self.results.count_rates_upscan = count_rates_upscan
 
     def calculate_count_rate_corr(self):
-        """Apply correction to count rate due to changes in
-        temperature:
+        """Apply correction to count rate due to changes in temperature:
 
         count_rate_corr = count_rate * (1.0 + detectorTemperatureCorr * (20.0 - detectorTemp))
 
@@ -206,29 +224,18 @@ class IrradianceExercise():
             detectorTemperatureCorr = 0.0061628
         """
 
-        temperatures_downscan = self.data.temperature_data_downscan['temperature']
-        temperatures_upscan = self.data.temperature_data_upscan['temperature']
+        temperatures_downscan = self.data.temperature_data_downscan['temperature'].values
+        temperatures_upscan = self.data.temperature_data_upscan['temperature'].values
 
-        # # For each count value, find corresponding temperature value
-        # chosen_temperatures_downscan, chosen_temperatures_upscan = [], []
-        # grating_data_times_datetime = self._convert_to_datetime(self.data.grating_data['time'])
-        # temperature_data_times_datetime = self._convert_to_datetime(self.data.temperature_data['time'])
-        # temperature_data_times_datetime = [item.replace(microsecond=0) for item in temperature_data_times_datetime]
-        # for time, count in zip(self.data.grating_data_downscan['time'], self.data.grating_data_downscan['counts'].values):
-        #     time_datetime = self.data_collection_start + datetime.timedelta(microseconds=time)
-        #     time_datetime = time_datetime.replace(microsecond=0)
-        #     index = [i for i, time in enumerate(temperature_data_times_datetime) if time == time_datetime]
-        #     print(temperatures_downscan[index])
-        # temp workaround
-        temperatures_downscan = temperatures_downscan[0:2528]
-        temperatures_upscan = temperatures_upscan[0:2517]
+        matched_temperatures_downscan = self._find_closest_temperature(self.data.grating_data_downscan, self.data.temperature_data_downscan)
+        matched_temperatures_upscan = self._find_closest_temperature(self.data.grating_data_upscan, self.data.temperature_data_upscan)
 
-        count_rate_corr_downscan = self.results.count_rates_downscan * (1.0 + self.detectorTemperatureCorr * (20.0 - temperatures_downscan))
-        count_rate_corr_upscan = self.results.count_rates_upscan * (1.0 + self.detectorTemperatureCorr * (20.0 - temperatures_upscan))
+        count_rate_corr_downscan = self.results.count_rates_downscan * (1.0 + self.detectorTemperatureCorr * (20.0 - np.array(matched_temperatures_downscan)))
+        count_rate_corr_upscan = self.results.count_rates_upscan * (1.0 + self.detectorTemperatureCorr * (20.0 - np.array(matched_temperatures_upscan)))
 
         # Store results for later use in plotting
-        self.results.count_rate_corr_downscan = count_rate_corr_downscan  # counts/sec/nm
-        self.results.count_rate_corr_upscan = count_rate_corr_upscan  # counts/sec/nm
+        self.results.count_rate_corr_downscan = count_rate_corr_downscan
+        self.results.count_rate_corr_upscan = count_rate_corr_upscan
 
     def calculate_median_dark_count_rate(self):
         """Calculate the median dark count rate, with applying temperature
@@ -332,6 +339,7 @@ class IrradianceExercise():
         reference_plot = figure(title="Reference Spectra", x_axis_label='Wavelength (nm)', y_axis_label='Irradiance (watts/m^2/nm)')
         reference_plot.line(self.data.reference_spectrum_data['wavelength'], self.data.reference_spectrum_data['irradiance'], line_width=2)
 
+        # Arrange plots in a grid
         grid = gridplot([[temperature_plot, distance_plot, grating_position_plot],
                          [counts_plot, integration_time_plot, reference_plot]], width=500, height=500)
 
@@ -344,23 +352,23 @@ class IrradianceExercise():
         """
         """
 
-        # # Plot irradiance near ~180nm emission lines
-        # p = figure(title="WattsPerM2", x_axis_label='Wavelength', y_axis_label='WattsPerM2', x_range=(180, 183))
-        # p.line(self.results.wavelengths_downscan, self.wattsPerM2_downscan, line_width=2, color='green', legend_label='Downscan')
-        # p.line(self.results.wavelengths_upscan, self.wattsPerM2_upscan, line_width=2, color='red', legend_label='Upscan')
-        # p.line(self.data.reference_spectrum_data['wavelength'], self.data.reference_spectrum_data['irradiance'], line_width=2, line_color='black', legend_label='Reference')
-        # show(p)
-        # output_file(filename='plots/irradiance.html')
-        # save(p)
+        # Plot irradiance near ~180nm emission lines
+        p = figure(title="WattsPerM2", x_axis_label='Wavelength', y_axis_label='WattsPerM2', x_range=(180, 183))
+        p.line(self.results.wavelengths_downscan, self.wattsPerM2_downscan, line_width=2, color='green', legend_label='Downscan')
+        p.line(self.results.wavelengths_upscan, self.wattsPerM2_upscan, line_width=2, color='red', legend_label='Upscan')
+        p.line(self.data.reference_spectrum_data['wavelength'], self.data.reference_spectrum_data['irradiance'], line_width=2, line_color='black', legend_label='Reference')
+        show(p)
+        output_file(filename='plots/irradiance.html')
+        save(p)
 
-        # Get reference spectrum data over downscan wavelength range
-        wavelength_start, wavelength_end = min(self.results.wavelengths_downscan), max(self.results.wavelengths_downscan)
-        print(wavelength_start, wavelength_end)
-        reference = self.data.reference_spectrum_data.loc[
-            (self.data.reference_spectrum_data['wavelength'] >= wavelength_start) &
-            (self.data.reference_spectrum_data['wavelength'] <= wavelength_end)]
-        print(reference)
-        print(self.results.wavelengths_downscan)
+        # # Get reference spectrum data over downscan wavelength range
+        # wavelength_start, wavelength_end = min(self.results.wavelengths_downscan), max(self.results.wavelengths_downscan)
+        # print(wavelength_start, wavelength_end)
+        # reference = self.data.reference_spectrum_data.loc[
+        #     (self.data.reference_spectrum_data['wavelength'] >= wavelength_start) &
+        #     (self.data.reference_spectrum_data['wavelength'] <= wavelength_end)]
+        # print(reference)
+        # print(self.results.wavelengths_downscan)
 
         # print(self.wattsPerM2_downscan)
         # print(self.results.wavelengths_downscan)
