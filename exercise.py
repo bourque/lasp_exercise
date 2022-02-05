@@ -362,7 +362,6 @@ class IrradianceExercise():
                          [counts_plot, integration_time_plot, reference_plot]], width=500, height=500)
 
         # Save plot
-        show(grid)
         output_file(filename='plots/instrument_data.html')
         save(grid)
 
@@ -375,33 +374,35 @@ class IrradianceExercise():
         p.line(self.results.wavelengths_downscan, self.results.irradiance_downscan, line_width=2, color='green', legend_label='Downscan')
         p.line(self.results.wavelengths_upscan, self.results.irradiance_upscan, line_width=2, color='red', legend_label='Upscan')
         p.line(self.data.reference_spectrum_data['wavelength'], self.data.reference_spectrum_data['irradiance'], line_width=2, line_color='black', legend_label='Reference')
-        show(p)
         output_file(filename='plots/irradiance.html')
         save(p)
 
+        # Find the reference spectrum values that match downscan/upscan wavelengths the closest
+        reference_values_downscan, reference_values_upscan = [], []
+        for index, wavelength_to_match in enumerate(self.results.wavelengths_downscan):
+            matched_index = np.argmin(np.abs(self.data.reference_spectrum_data['wavelength'].values - wavelength_to_match))
+            matched_value = self.data.reference_spectrum_data['irradiance'].values[matched_index]
+            reference_values_downscan.append(matched_value)
+        for index, wavelength_to_match in enumerate(self.results.wavelengths_upscan):
+            matched_index = np.argmin(np.abs(self.data.reference_spectrum_data['wavelength'].values - wavelength_to_match))
+            matched_value = self.data.reference_spectrum_data['irradiance'].values[matched_index]
+            reference_values_upscan.append(matched_value)
 
-        # # Get reference spectrum data over downscan wavelength range
-        # wavelength_start, wavelength_end = min(self.results.wavelengths_downscan), max(self.results.wavelengths_downscan)
-        # print(wavelength_start, wavelength_end)
-        # reference = self.data.reference_spectrum_data.loc[
-        #     (self.data.reference_spectrum_data['wavelength'] >= wavelength_start) &
-        #     (self.data.reference_spectrum_data['wavelength'] <= wavelength_end)]
-        # print(reference)
-        # print(len(self.results.wavelengths_downscan))
-
-        # print(wattsPerM2_downscan)
-        # print(self.results.wavelengths_downscan)
-        # print(self.data.reference_spectrum_data['irradiance'])
-        # # Plot irradiance ratio w.r.t. reference
-        # downscan_ratio = wattsPerM2_downscan / self.data.reference_spectrum_data['irrandiance']
-        # p = figure(title="WattsPerM2", x_axis_label='Wavelength', y_axis_label='WattsPerM2')
+        # Plot irradiance ratio w.r.t. reference
+        downscan_ratio = self.results.irradiance_downscan / reference_values_downscan
+        upscan_ratio = self.results.irradiance_upscan / reference_values_upscan
+        p = figure(title="Irradiance Ratio w.r.t. Reference Spectra", x_axis_label='Wavelength', y_axis_label='Irradiance', x_range=(180, 183))
+        p.line(self.results.wavelengths_downscan, downscan_ratio, line_width=2, color='green', legend_label='Downscan')
+        p.line(self.results.wavelengths_upscan, upscan_ratio, line_width=2, color='red', legend_label='Upscan')
+        output_file(filename='plots/irradiance_ratios.html')
+        save(p)
 
 
 if __name__ == '__main__':
 
     ie = IrradianceExercise()
     ie.get_data()
-    #ie.make_plots_raw_data()
+    ie.make_plots_raw_data()
     ie.calculate_wavelengths()
     ie.calculate_energyPerPhoton()
     ie.calculate_count_rate()
