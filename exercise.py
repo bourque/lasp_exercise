@@ -1,10 +1,61 @@
-"""
-To do:
-    - Write unit tests
-    - Implement CI
-    - PEP8 changes
-    - Document possible improvements
-    - Write README and/or report
+"""This module contains software for completing the LASP coding
+exercise.  The goal of the exercise is to calculate the measured
+irradience from the SOlar Stellar Irradiance Comparison Experiment
+(SOLSTICE).
+
+The main tasks of this exercise are to:
+    (1) Calculate the irradiance in watts/nm/m^2 for the UpScan and
+        DownScan experiments and compare the results
+    (2) Plot the irradiance as a function of wavelength around two emission
+        lines located at ~180nm
+    (3) Calculate and plot the ratio of the irradiances at each
+        wavelength for each scan with respect to the reference spectrum
+
+Use
+---
+
+    To perform these calculations and make corresponding plots:
+
+        ie = IrradianceExercise()
+        ie.get_data()
+        ie.make_plots_input_data()
+        ie.run_calculations()
+        ie.make_plots_results()
+
+    It is required that a 'data/' directory exists in the working
+    directory, and it contains the following data files:
+
+        * detectorTemp.txt : in degrees Celsius. It is roughly sampled
+          at 1 second.
+        * distanceAndDoppler.txt : These are the corrections used to
+          adjust for the changing
+          distance and velocity of the spacecraft relative to the sun.
+        * instrumentTelemetry.txt : Includes grating position and
+          measured detector counts. The detector counts correspond
+          to the number of photons detected within the currently set
+          integrationTime (in milli-seconds).
+        * integrationTime.txt : This is the currently set integration
+          time (mlli-seconds) of the instrument. These are sampled
+          at a different cadence than the instrumentTelemetry. Assume
+          the value is constant until there is a new value.
+        * plans.txt : This file includes the experiment names with
+          start/end times. You can find the
+          time ranges of the plans of interest here.
+        * referenceSpectrum.txt : This is a reference spectrum with
+          accurate wavelengths. The current irradiance measurements
+          will be within 15% of this spectrum.
+
+Dependencies
+------------
+
+    - bokeh
+    - numpy
+    - pandas
+
+    The user may utilize the provided 'requirements.txt' and/or
+    'environment.yml' files to create the necessary software
+    environment to run the code.  More details about this are provided
+    in the README
 """
 
 from collections import namedtuple
