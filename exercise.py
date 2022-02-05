@@ -1,6 +1,5 @@
 """
 To do:
-    - Calculate and plot the ratio of the Irradiances at each wavelength for each scan with respect to the reference spectrum
     - Write unit tests
     - Implement CI
     - PEP8 changes
@@ -104,9 +103,12 @@ class IrradianceExercise():
             The bokeh plot to add shaded regions to
         """
 
-        plot.add_layout(BoxAnnotation(left=self.downscan_start_dt, right=self.downscan_end_dt, fill_alpha=0.1, fill_color='green', line_color='green'))
-        plot.add_layout(BoxAnnotation(left=self.dark_start_dt, right=self.dark_end_dt, fill_alpha=0.1, fill_color='gray', line_color='black'))
-        plot.add_layout(BoxAnnotation(left=self.upscan_start_dt, right=self.upscan_end_dt, fill_alpha=0.1, fill_color='red', line_color='red'))
+        start_times = [self.downscan_start_dt, self.dark_start_dt, self.upscan_start_dt]
+        end_times = [self.downscan_end_dt, self.dark_end_dt, self.upscan_end_dt]
+        colors = ['green', 'gray', 'red']
+
+        for start, end, color in zip(start_times, end_times, colors):
+            plot.add_layout(BoxAnnotation(left=start, right=end, fill_color=color, line_color=color, fill_alpha=0.1))
 
         return plot
 
@@ -238,12 +240,16 @@ class IrradianceExercise():
         """
 
         # Find detector temperature measurements closest in time with grading position data
-        matched_temperatures_downscan = self._find_closest_measurements(self.data.grating_data_downscan, self.data.temperature_data_downscan, 'temperature')
-        matched_temperatures_upscan = self._find_closest_measurements(self.data.grating_data_upscan, self.data.temperature_data_upscan, 'temperature')
+        matched_temperatures_downscan = self._find_closest_measurements(
+            self.data.grating_data_downscan, self.data.temperature_data_downscan, 'temperature')
+        matched_temperatures_upscan = self._find_closest_measurements(
+            self.data.grating_data_upscan, self.data.temperature_data_upscan, 'temperature')
 
         # Apply temperature correction
-        count_rate_corr_downscan = self.results.count_rates_downscan * (1.0 + self.detectorTemperatureCorr * (20.0 - np.array(matched_temperatures_downscan)))
-        count_rate_corr_upscan = self.results.count_rates_upscan * (1.0 + self.detectorTemperatureCorr * (20.0 - np.array(matched_temperatures_upscan)))
+        count_rate_corr_downscan = self.results.count_rates_downscan * \
+            (1.0 + self.detectorTemperatureCorr * (20.0 - np.array(matched_temperatures_downscan)))
+        count_rate_corr_upscan = self.results.count_rates_upscan * \
+            (1.0 + self.detectorTemperatureCorr * (20.0 - np.array(matched_temperatures_upscan)))
 
         # Store results for later use in plotting
         self.results.count_rate_corr_downscan = count_rate_corr_downscan
@@ -266,10 +272,12 @@ class IrradianceExercise():
         dark_count_rates = dark_counts / dark_integration_times
 
         # Find detector temperature measurements closest in time with grating position data
-        matched_temperatures_dark = self._find_closest_measurements(self.data.grating_data_dark, self.data.temperature_data_dark, 'temperature')
+        matched_temperatures_dark = self._find_closest_measurements(
+            self.data.grating_data_dark, self.data.temperature_data_dark, 'temperature')
 
         # Apply temperature correction
-        median_dark_count_rate = np.median(dark_count_rates * (1.0 + self.detectorTemperatureCorr * (20.0 - np.array(matched_temperatures_dark))))
+        median_dark_count_rate = np.median(dark_count_rates * \
+            (1.0 + self.detectorTemperatureCorr * (20.0 - np.array(matched_temperatures_dark))))
 
         # Store results for later use in plotting
         self.results.median_dark_count_rate = median_dark_count_rate
@@ -285,8 +293,10 @@ class IrradianceExercise():
 
         # Calculate photons/s/m^2
         aperture_area = .01 / (1E2 * 1E2)
-        photonsPerSecondPerM2_downscan = (self.results.count_rate_corr_downscan - self.results.median_dark_count_rate) / aperture_area
-        photonsPerSecondPerM2_upscan = (self.results.count_rate_corr_upscan - self.results.median_dark_count_rate) / aperture_area
+        photonsPerSecondPerM2_downscan = (
+            self.results.count_rate_corr_downscan - self.results.median_dark_count_rate) / aperture_area
+        photonsPerSecondPerM2_upscan = (
+            self.results.count_rate_corr_upscan - self.results.median_dark_count_rate) / aperture_area
 
         # Store results for later use in plotting
         self.results.photonsPerSecondPerM2_downscan = photonsPerSecondPerM2_downscan
@@ -307,8 +317,10 @@ class IrradianceExercise():
         wattsPerM2_upscan = self.results.photonsPerSecondPerM2_upscan * self.results.energyPerPhotons_upscan
 
         # Find distance correction measurements closest in time with grating position data
-        matched_distances_downscan = self._find_closest_measurements(self.data.grating_data_downscan, self.data.distance_data_downscan, 'distance_correction')
-        matched_distances_upscan = self._find_closest_measurements(self.data.grating_data_upscan, self.data.distance_data_upscan, 'distance_correction')
+        matched_distances_downscan = self._find_closest_measurements(
+            self.data.grating_data_downscan, self.data.distance_data_downscan, 'distance_correction')
+        matched_distances_upscan = self._find_closest_measurements(
+            self.data.grating_data_upscan, self.data.distance_data_upscan, 'distance_correction')
 
         # Calculate irradiance
         irradiance_downscan = wattsPerM2_downscan / matched_distances_downscan
@@ -318,9 +330,9 @@ class IrradianceExercise():
         self.results.irradiance_downscan = irradiance_downscan
         self.results.irradiance_upscan = irradiance_upscan
 
-    def make_plots_raw_data(self):
-        """Create a grid of bokeh plots displaying the raw data from
-        the instrument
+    def make_plots_input_data(self):
+        """Create a grid of bokeh plots displaying the data gathered
+        from the instrument
         """
 
         # Make detector temperature plot
@@ -331,19 +343,20 @@ class IrradianceExercise():
 
         # Make Distance Correction and Doppler Factor plot
         times_datetime = self._convert_to_datetime(self.data.distance_data['time'])
-        distance_plot = figure(title="Distance Correction and Doppler Factor", x_axis_label='Time', y_axis_label='Distance', x_axis_type='datetime')
-        distance_plot.line(times_datetime, self.data.distance_data['distance_correction'], line_width=2)
-        distance_plot.line(times_datetime, self.data.distance_data['doppler_factor'], line_width=2)
+        distance_plot = figure(title="Distance Correction and Doppler Factor", x_axis_label='Time', x_axis_type='datetime')
+        distance_plot.line(times_datetime, self.data.distance_data['distance_correction'], line_width=2, line_color='blue', legend_label='Distance Correction')
+        distance_plot.line(times_datetime, self.data.distance_data['doppler_factor'], line_width=2, line_color='green', legend_label='Doppler Factor')
+        distance_plot.legend.location = 'right'
         distance_plot = self._indicate_experiments(distance_plot)
 
         # Make Grating Position plot
         times_datetime = self._convert_to_datetime(self.data.grating_data['time'])
-        grating_position_plot = figure(title="Grating Position", x_axis_label='Time', y_axis_label='Grating Position', x_axis_type='datetime')
+        grating_position_plot = figure(title="Grating Position", x_axis_label='Time', x_axis_type='datetime')
         grating_position_plot.line(times_datetime, self.data.grating_data['grating_position'], line_width=2)
         grating_position_plot = self._indicate_experiments(grating_position_plot)
 
         # Make Counts plot
-        counts_plot = figure(title="Counts", x_axis_label='Time', y_axis_label='Counts', x_axis_type='datetime')
+        counts_plot = figure(title="Counts", x_axis_label='Time', x_axis_type='datetime')
         counts_plot.line(times_datetime, self.data.grating_data['counts'], line_width=2)
         counts_plot = self._indicate_experiments(counts_plot)
 
@@ -366,11 +379,10 @@ class IrradianceExercise():
         save(grid)
 
     def make_plots_results(self):
-        """
-        """
+        """Create bokeh plots showing results of the exercise"""
 
         # Plot irradiance near ~180nm emission lines
-        p = figure(title="WattsPerM2", x_axis_label='Wavelength', y_axis_label='WattsPerM2', x_range=(180, 183))
+        p = figure(title="Irradiance at 1AU", x_axis_label='Wavelength', y_axis_label='Irradiance (watts/m^2/nm)', x_range=(180, 183))
         p.line(self.results.wavelengths_downscan, self.results.irradiance_downscan, line_width=2, color='green', legend_label='Downscan')
         p.line(self.results.wavelengths_upscan, self.results.irradiance_upscan, line_width=2, color='red', legend_label='Upscan')
         p.line(self.data.reference_spectrum_data['wavelength'], self.data.reference_spectrum_data['irradiance'], line_width=2, line_color='black', legend_label='Reference')
@@ -391,23 +403,30 @@ class IrradianceExercise():
         # Plot irradiance ratio w.r.t. reference
         downscan_ratio = self.results.irradiance_downscan / reference_values_downscan
         upscan_ratio = self.results.irradiance_upscan / reference_values_upscan
-        p = figure(title="Irradiance Ratio w.r.t. Reference Spectra", x_axis_label='Wavelength', y_axis_label='Irradiance', x_range=(180, 183))
+        p = figure(title="Irradiance Ratio w.r.t. Reference Spectra", x_axis_label='Wavelength (nm)', y_axis_label='Irradiance (watts/m^2/nm)', x_range=(180, 183))
         p.line(self.results.wavelengths_downscan, downscan_ratio, line_width=2, color='green', legend_label='Downscan')
         p.line(self.results.wavelengths_upscan, upscan_ratio, line_width=2, color='red', legend_label='Upscan')
         output_file(filename='plots/irradiance_ratios.html')
         save(p)
+
+    def run_calculations(self):
+        """Main method for running calculations necessary for
+        determining irradiance
+        """
+
+        self.calculate_wavelengths()
+        self.calculate_energyPerPhoton()
+        self.calculate_count_rate()
+        self.calculate_count_rate_corr()
+        self.calculate_median_dark_count_rate()
+        self.calculate_photonsPerSecondPerM2()
+        self.calculate_irradiance()
 
 
 if __name__ == '__main__':
 
     ie = IrradianceExercise()
     ie.get_data()
-    ie.make_plots_raw_data()
-    ie.calculate_wavelengths()
-    ie.calculate_energyPerPhoton()
-    ie.calculate_count_rate()
-    ie.calculate_count_rate_corr()
-    ie.calculate_median_dark_count_rate()
-    ie.calculate_photonsPerSecondPerM2()
-    ie.calculate_irradiance()
+    ie.make_plots_input_data()
+    ie.run_calculations()
     ie.make_plots_results()
