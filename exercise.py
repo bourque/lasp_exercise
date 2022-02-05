@@ -3,20 +3,19 @@ To do:
     - Write unit tests
     - Implement CI
     - PEP8 changes
-    - Shorten some long lines of code
     - Document possible improvements
     - Write README and/or report
 """
 
 from collections import namedtuple
 import datetime
-import math
 
 from bokeh.layouts import gridplot
-from bokeh.models import BoxAnnotation, Span
-from bokeh.plotting import figure, output_file, save, show
+from bokeh.models import BoxAnnotation
+from bokeh.plotting import figure, output_file, save
 import numpy as np
 import pandas
+
 
 class IrradianceExercise():
     """Main class for completing the exercise"""
@@ -112,101 +111,6 @@ class IrradianceExercise():
 
         return plot
 
-    def get_data(self):
-        """Read in data from input data files and store data within
-        class object via a 'data' attribute.  This method also creates
-        other attributes (e.g. experiement start/end times, subsets of
-        data for specific experiments, etc.) for convenience in
-        calculations and/or plotting.
-        """
-
-        # Package data into namedtuple object
-        self.data = namedtuple('data', field_names=[])
-        self.data.temperature_data = pandas.read_csv('data/detectorTemp.txt', names=['time', 'temperature'], header=0)
-        self.data.distance_data = pandas.read_csv('data/distanceAndDoppler.txt', names=['time', 'distance_correction', 'doppler_factor'], header=0)
-        self.data.grating_data = pandas.read_csv('data/instrumentTelemetry.txt', names=['time', 'grating_position', 'counts'], header=0)
-        self.data.integration_data = pandas.read_csv('data/integrationTime.txt', names=['time', 'integration_time'], header=0)
-        self.data.reference_spectrum_data = pandas.read_csv('data/referenceSpectrum.txt', names=['wavelength', 'irradiance'], header=0)
-        self.data.plan_data = pandas.read_csv('data/plans.txt', names=['plan', 'start_time', 'end_time'], header=0)
-
-        # Set some other attributes for convenience
-        self.data_collection_start = datetime.datetime(1980, 1, 6, 0, 0)
-        self.downscan_start = self.data.plan_data['start_time'][0]
-        self.downscan_end = self.data.plan_data['end_time'][0]
-        self.dark_start = self.data.plan_data['start_time'][1]
-        self.dark_end = self.data.plan_data['end_time'][1]
-        self.upscan_start = self.data.plan_data['start_time'][2]
-        self.upscan_end = self.data.plan_data['end_time'][2]
-        self.downscan_start_dt = self.data_collection_start + datetime.timedelta(microseconds=self.downscan_start)
-        self.downscan_end_dt = self.data_collection_start + datetime.timedelta(microseconds=self.downscan_end)
-        self.dark_start_dt = self.data_collection_start + datetime.timedelta(microseconds=self.dark_start)
-        self.dark_end_dt = self.data_collection_start + datetime.timedelta(microseconds=self.dark_end)
-        self.upscan_start_dt = self.data_collection_start + datetime.timedelta(microseconds=self.upscan_start)
-        self.upscan_end_dt = self.data_collection_start + datetime.timedelta(microseconds=self.upscan_end)
-
-        # Set some attriubutes for subsets of data for downscan, dark, and upscan experiments
-        self.data.temperature_data_downscan = self.data.temperature_data[self.data.temperature_data['time'].between(self.downscan_start, self.downscan_end)]
-        self.data.temperature_data_dark = self.data.temperature_data[self.data.temperature_data['time'].between(self.dark_start, self.dark_end)]
-        self.data.temperature_data_upscan = self.data.temperature_data[self.data.temperature_data['time'].between(self.upscan_start, self.upscan_end)]
-        self.data.distance_data_downscan = self.data.distance_data[self.data.distance_data['time'].between(self.downscan_start, self.downscan_end)]
-        self.data.distance_data_dark = self.data.distance_data[self.data.distance_data['time'].between(self.dark_start, self.dark_end)]
-        self.data.distance_data_upscan = self.data.distance_data[self.data.distance_data['time'].between(self.upscan_start, self.upscan_end)]
-        self.data.grating_data_downscan = self.data.grating_data[self.data.grating_data['time'].between(self.downscan_start, self.downscan_end)]
-        self.data.grating_data_dark = self.data.grating_data[self.data.grating_data['time'].between(self.dark_start, self.dark_end)]
-        self.data.grating_data_upscan = self.data.grating_data[self.data.grating_data['time'].between(self.upscan_start, self.upscan_end)]
-        self.data.integration_data_downscan = self.data.integration_data[self.data.integration_data['time'].between(self.downscan_start, self.downscan_end)]
-        self.data.integration_data_dark = self.data.integration_data[self.data.integration_data['time'].between(self.dark_start, self.dark_end)]
-        self.data.integration_data_upscan = self.data.integration_data[self.data.integration_data['time'].between(self.upscan_start, self.upscan_end)]
-
-    def calculate_wavelengths(self):
-        """Calculate wavelengths (in nm) from the grating positions via
-        the grating equation:
-
-        wavelength = 2 * d * sin(ang) * cos(phiGInRads / 2.0) [nm]
-
-        where:
-            d = 277.77777777777777 [nm]
-            ang = (offset - gratingPosition) * stepSize
-            phiGInRads = 0.08503244115716374 [rad]
-            offset = 239532.38
-            stepSize = 2.4237772022101214E-6 [rad]
-        """
-
-        # Calculate angle of incidence
-        angles_downscan = ((self.offset - self.data.grating_data_downscan['grating_position']) * self.stepSize).values
-        angles_upscan = ((self.offset - self.data.grating_data_upscan['grating_position']) * self.stepSize).values
-
-        # Calculate wavelength
-        wavelengths_downscan = 2 * self.d * np.sin(angles_downscan) * np.cos(self.phiGInRads / 2.0)
-        wavelengths_upscan = 2 * self.d * np.sin(angles_upscan) * np.cos(self.phiGInRads / 2.0)
-
-        # Store results for later use in plotting
-        self.results.wavelengths_downscan = wavelengths_downscan
-        self.results.wavelengths_upscan = wavelengths_upscan
-
-    def calculate_energyPerPhoton(self):
-        """Calculate the energy per photon:
-
-        energyPerPhotons = h * c / wavelength [J]
-
-        where:
-            h = 6.62606957E-34 [J*s]
-            c = 299792458.0 [m/s]
-            wavelength is in [m]
-        """
-
-        # Convert wavelengths from nm to m
-        wavelengths_downscan_m = self.results.wavelengths_downscan * 1E-9
-        wavelengths_upscan_m = self.results.wavelengths_upscan * 1E-9
-
-        # Calculate energy per photon
-        energyPerPhotons_downscan = self.h * self.c / wavelengths_downscan_m
-        energyPerPhotons_upscan = self.h * self.c / wavelengths_upscan_m
-
-        # Store results for later use in plotting
-        self.results.energyPerPhotons_downscan = energyPerPhotons_downscan
-        self.results.energyPerPhotons_upscan = energyPerPhotons_upscan
-
     def calculate_count_rate(self):
         """Calculate the count rate:
 
@@ -255,6 +159,57 @@ class IrradianceExercise():
         self.results.count_rate_corr_downscan = count_rate_corr_downscan
         self.results.count_rate_corr_upscan = count_rate_corr_upscan
 
+    def calculate_energyPerPhoton(self):
+        """Calculate the energy per photon:
+
+        energyPerPhotons = h * c / wavelength [J]
+
+        where:
+            h = 6.62606957E-34 [J*s]
+            c = 299792458.0 [m/s]
+            wavelength is in [m]
+        """
+
+        # Convert wavelengths from nm to m
+        wavelengths_downscan_m = self.results.wavelengths_downscan * 1E-9
+        wavelengths_upscan_m = self.results.wavelengths_upscan * 1E-9
+
+        # Calculate energy per photon
+        energyPerPhotons_downscan = self.h * self.c / wavelengths_downscan_m
+        energyPerPhotons_upscan = self.h * self.c / wavelengths_upscan_m
+
+        # Store results for later use in plotting
+        self.results.energyPerPhotons_downscan = energyPerPhotons_downscan
+        self.results.energyPerPhotons_upscan = energyPerPhotons_upscan
+
+    def calculate_irradiance(self):
+        """Calculate the solar irradiance:
+
+        wattsPerM2_1AU = wattsPerM2 / sunObserverDistanceCorrection
+
+        where:
+            wattsPerM2 = photonsPerSecondPerM2 * energyPerPhoton
+            sunObserverDistanceCorrection is (something)
+        """
+
+        # Calculate watts/m^2
+        wattsPerM2_downscan = self.results.photonsPerSecondPerM2_downscan * self.results.energyPerPhotons_downscan
+        wattsPerM2_upscan = self.results.photonsPerSecondPerM2_upscan * self.results.energyPerPhotons_upscan
+
+        # Find distance correction measurements closest in time with grating position data
+        matched_distances_downscan = self._find_closest_measurements(
+            self.data.grating_data_downscan, self.data.distance_data_downscan, 'distance_correction')
+        matched_distances_upscan = self._find_closest_measurements(
+            self.data.grating_data_upscan, self.data.distance_data_upscan, 'distance_correction')
+
+        # Calculate irradiance
+        irradiance_downscan = wattsPerM2_downscan / matched_distances_downscan
+        irradiance_upscan = wattsPerM2_upscan / matched_distances_upscan
+
+        # Store results for later use in plotting
+        self.results.irradiance_downscan = irradiance_downscan
+        self.results.irradiance_upscan = irradiance_upscan
+
     def calculate_median_dark_count_rate(self):
         """Calculate the median dark count rate, with applying temperature
         correction described in calcualte_count_rate_corr():
@@ -302,33 +257,77 @@ class IrradianceExercise():
         self.results.photonsPerSecondPerM2_downscan = photonsPerSecondPerM2_downscan
         self.results.photonsPerSecondPerM2_upscan = photonsPerSecondPerM2_upscan
 
-    def calculate_irradiance(self):
-        """Calculate the solar irradiance:
+    def calculate_wavelengths(self):
+        """Calculate wavelengths (in nm) from the grating positions via
+        the grating equation:
 
-        wattsPerM2_1AU = wattsPerM2 / sunObserverDistanceCorrection
+        wavelength = 2 * d * sin(ang) * cos(phiGInRads / 2.0) [nm]
 
         where:
-            wattsPerM2 = photonsPerSecondPerM2 * energyPerPhoton
-            sunObserverDistanceCorrection is (something)
+            d = 277.77777777777777 [nm]
+            ang = (offset - gratingPosition) * stepSize
+            phiGInRads = 0.08503244115716374 [rad]
+            offset = 239532.38
+            stepSize = 2.4237772022101214E-6 [rad]
         """
 
-        # Calculate watts/m^2
-        wattsPerM2_downscan = self.results.photonsPerSecondPerM2_downscan * self.results.energyPerPhotons_downscan
-        wattsPerM2_upscan = self.results.photonsPerSecondPerM2_upscan * self.results.energyPerPhotons_upscan
+        # Calculate angle of incidence
+        angles_downscan = ((self.offset - self.data.grating_data_downscan['grating_position']) * self.stepSize).values
+        angles_upscan = ((self.offset - self.data.grating_data_upscan['grating_position']) * self.stepSize).values
 
-        # Find distance correction measurements closest in time with grating position data
-        matched_distances_downscan = self._find_closest_measurements(
-            self.data.grating_data_downscan, self.data.distance_data_downscan, 'distance_correction')
-        matched_distances_upscan = self._find_closest_measurements(
-            self.data.grating_data_upscan, self.data.distance_data_upscan, 'distance_correction')
-
-        # Calculate irradiance
-        irradiance_downscan = wattsPerM2_downscan / matched_distances_downscan
-        irradiance_upscan = wattsPerM2_upscan / matched_distances_upscan
+        # Calculate wavelength
+        wavelengths_downscan = 2 * self.d * np.sin(angles_downscan) * np.cos(self.phiGInRads / 2.0)
+        wavelengths_upscan = 2 * self.d * np.sin(angles_upscan) * np.cos(self.phiGInRads / 2.0)
 
         # Store results for later use in plotting
-        self.results.irradiance_downscan = irradiance_downscan
-        self.results.irradiance_upscan = irradiance_upscan
+        self.results.wavelengths_downscan = wavelengths_downscan
+        self.results.wavelengths_upscan = wavelengths_upscan
+
+    def get_data(self):
+        """Read in data from input data files and store data within
+        class object via a 'data' attribute.  This method also creates
+        other attributes (e.g. experiement start/end times, subsets of
+        data for specific experiments, etc.) for convenience in
+        calculations and/or plotting.
+        """
+
+        # Package data into namedtuple object
+        self.data = namedtuple('data', field_names=[])
+        self.data.temperature_data = pandas.read_csv('data/detectorTemp.txt', names=['time', 'temperature'], header=0)
+        self.data.distance_data = pandas.read_csv('data/distanceAndDoppler.txt', names=['time', 'distance_correction', 'doppler_factor'], header=0)
+        self.data.grating_data = pandas.read_csv('data/instrumentTelemetry.txt', names=['time', 'grating_position', 'counts'], header=0)
+        self.data.integration_data = pandas.read_csv('data/integrationTime.txt', names=['time', 'integration_time'], header=0)
+        self.data.reference_spectrum_data = pandas.read_csv('data/referenceSpectrum.txt', names=['wavelength', 'irradiance'], header=0)
+        self.data.plan_data = pandas.read_csv('data/plans.txt', names=['plan', 'start_time', 'end_time'], header=0)
+
+        # Set some other attributes for convenience
+        self.data_collection_start = datetime.datetime(1980, 1, 6, 0, 0)
+        self.downscan_start = self.data.plan_data['start_time'][0]
+        self.downscan_end = self.data.plan_data['end_time'][0]
+        self.dark_start = self.data.plan_data['start_time'][1]
+        self.dark_end = self.data.plan_data['end_time'][1]
+        self.upscan_start = self.data.plan_data['start_time'][2]
+        self.upscan_end = self.data.plan_data['end_time'][2]
+        self.downscan_start_dt = self.data_collection_start + datetime.timedelta(microseconds=self.downscan_start)
+        self.downscan_end_dt = self.data_collection_start + datetime.timedelta(microseconds=self.downscan_end)
+        self.dark_start_dt = self.data_collection_start + datetime.timedelta(microseconds=self.dark_start)
+        self.dark_end_dt = self.data_collection_start + datetime.timedelta(microseconds=self.dark_end)
+        self.upscan_start_dt = self.data_collection_start + datetime.timedelta(microseconds=self.upscan_start)
+        self.upscan_end_dt = self.data_collection_start + datetime.timedelta(microseconds=self.upscan_end)
+
+        # Set some attriubutes for subsets of data for downscan, dark, and upscan experiments
+        self.data.temperature_data_downscan = self.data.temperature_data[self.data.temperature_data['time'].between(self.downscan_start, self.downscan_end)]
+        self.data.temperature_data_dark = self.data.temperature_data[self.data.temperature_data['time'].between(self.dark_start, self.dark_end)]
+        self.data.temperature_data_upscan = self.data.temperature_data[self.data.temperature_data['time'].between(self.upscan_start, self.upscan_end)]
+        self.data.distance_data_downscan = self.data.distance_data[self.data.distance_data['time'].between(self.downscan_start, self.downscan_end)]
+        self.data.distance_data_dark = self.data.distance_data[self.data.distance_data['time'].between(self.dark_start, self.dark_end)]
+        self.data.distance_data_upscan = self.data.distance_data[self.data.distance_data['time'].between(self.upscan_start, self.upscan_end)]
+        self.data.grating_data_downscan = self.data.grating_data[self.data.grating_data['time'].between(self.downscan_start, self.downscan_end)]
+        self.data.grating_data_dark = self.data.grating_data[self.data.grating_data['time'].between(self.dark_start, self.dark_end)]
+        self.data.grating_data_upscan = self.data.grating_data[self.data.grating_data['time'].between(self.upscan_start, self.upscan_end)]
+        self.data.integration_data_downscan = self.data.integration_data[self.data.integration_data['time'].between(self.downscan_start, self.downscan_end)]
+        self.data.integration_data_dark = self.data.integration_data[self.data.integration_data['time'].between(self.dark_start, self.dark_end)]
+        self.data.integration_data_upscan = self.data.integration_data[self.data.integration_data['time'].between(self.upscan_start, self.upscan_end)]
 
     def make_plots_input_data(self):
         """Create a grid of bokeh plots displaying the data gathered
