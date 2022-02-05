@@ -32,14 +32,28 @@ Equtions for reference:
 
     wattsPerM2 = photonsPerSecondPerM2 * energyPerPhoton
     irradiance = wattsPerM2_1AU = wattsPerM2 / sunObserverDistanceCorrection
+
+To do:
+    - Make plots for results
+    - Try to make code more DRY
+    - Fix/implement remaining corrections
+    - Write unit tests
+    - Add docstrings
+    - Implement CI
+    - PEP8 changes
+    - Finalize conda env and/or requirements file
+    - Document possible improvements
+    - Write README and/or report
+    - Set up PR
 """
 
 from collections import namedtuple
 import datetime
 import math
 
-from bokeh.models import Span
-from bokeh.plotting import figure, show
+from bokeh.layouts import gridplot
+from bokeh.models import BoxAnnotation, Span
+from bokeh.plotting import figure, output_file, show
 import numpy as np
 import pandas
 
@@ -66,13 +80,19 @@ class IrradianceExercise():
         self._get_data()
 
         # Set some other attributes for convenience
-        self.data_collection_start_date = datetime.datetime(1980, 1, 6, 0, 0)
+        self.data_collection_start = datetime.datetime(1980, 1, 6, 0, 0)
         self.downscan_start = self.data.plan_data['start_time'][0]
         self.downscan_end = self.data.plan_data['end_time'][0]
         self.dark_start = self.data.plan_data['start_time'][1]
         self.dark_end = self.data.plan_data['end_time'][1]
         self.upscan_start = self.data.plan_data['start_time'][2]
         self.upscan_end = self.data.plan_data['end_time'][2]
+        self.downscan_start_dt = self.data_collection_start + datetime.timedelta(microseconds=self.downscan_start)
+        self.downscan_end_dt = self.data_collection_start + datetime.timedelta(microseconds=self.downscan_end)
+        self.dark_start_dt = self.data_collection_start + datetime.timedelta(microseconds=self.dark_start)
+        self.dark_end_dt = self.data_collection_start + datetime.timedelta(microseconds=self.dark_end)
+        self.upscan_start_dt = self.data_collection_start + datetime.timedelta(microseconds=self.upscan_start)
+        self.upscan_end_dt = self.data_collection_start + datetime.timedelta(microseconds=self.upscan_end)
 
         # Make useful subsets of data based on experiement
         self._make_data_subsets()
@@ -87,7 +107,7 @@ class IrradianceExercise():
 
         converted_times = []
         for time in times:
-            converted_times.append(self.data_collection_start_date + datetime.timedelta(microseconds=time))
+            converted_times.append(self.data_collection_start + datetime.timedelta(microseconds=time))
 
         return converted_times
 
@@ -124,17 +144,14 @@ class IrradianceExercise():
         self.data.integration_data_dark = self.data.integration_data[self.data.integration_data['time'].between(self.dark_start, self.dark_end)]
         self.data.integration_data_upscan = self.data.integration_data[self.data.integration_data['time'].between(self.upscan_start, self.upscan_end)]
 
-    def _indicate_experiment_times(self, plot):
+    def _indicate_experiments(self, plot):
         """
         """
 
-        downscan_start = Span(location=self.downscan_start, dimension='height', line_color='green', line_dash='dashed', line_width=1)
-        downscan_end = Span(location=self.downscan_end, dimension='height', line_color='green', line_dash='dashed', line_width=1)
-        dark_start = Span(location=self.dark_start, dimension='height', line_color='black', line_dash='dashed', line_width=1)
-        dark_end = Span(location=self.dark_end, dimension='height', line_color='black', line_dash='dashed', line_width=1)
-        upscan_start = Span(location=self.upscan_start, dimension='height', line_color='red', line_dash='dashed', line_width=1)
-        upscan_end = Span(location=self.upscan_end, dimension='height', line_color='red', line_dash='dashed', line_width=1)
-        plot.renderers.extend([downscan_start, downscan_end, upscan_start, upscan_end, dark_start, dark_end])
+        # Mark experiment times with shaded regions
+        plot.add_layout(BoxAnnotation(left=self.downscan_start_dt, right=self.downscan_end_dt, fill_alpha=0.1, fill_color='green', line_color='green'))
+        plot.add_layout(BoxAnnotation(left=self.dark_start_dt, right=self.dark_end_dt, fill_alpha=0.1, fill_color='gray', line_color='black'))
+        plot.add_layout(BoxAnnotation(left=self.upscan_start_dt, right=self.upscan_end_dt, fill_alpha=0.1, fill_color='red', line_color='red'))
 
         return plot
 
@@ -202,7 +219,7 @@ class IrradianceExercise():
         # temperature_data_times_datetime = self._convert_to_datetime(self.data.temperature_data['time'])
         # temperature_data_times_datetime = [item.replace(microsecond=0) for item in temperature_data_times_datetime]
         # for time, count in zip(self.data.grating_data_downscan['time'], self.data.grating_data_downscan['counts'].values):
-        #     time_datetime = self.data_collection_start_date + datetime.timedelta(microseconds=time)
+        #     time_datetime = self.data_collection_start + datetime.timedelta(microseconds=time)
         #     time_datetime = time_datetime.replace(microsecond=0)
         #     index = [i for i, time in enumerate(temperature_data_times_datetime) if time == time_datetime]
         #     print(temperatures_downscan[index])
@@ -268,61 +285,58 @@ class IrradianceExercise():
         p.line(self.data.reference_spectrum_data['wavelength'], self.data.reference_spectrum_data['irradiance'], line_width=2, line_color='purple')
         show(p)
 
-    def make_plots(self):
+    def make_plots_raw_data(self):
         """
         """
 
         # Make detector temperature plot
         times_datetime = self._convert_to_datetime(self.data.temperature_data['time'])
-        p = figure(title="Detector Temperature", x_axis_label='Time', y_axis_label='Temp (C)', x_axis_type='datetime')
-        p.line(times_datetime, self.data.temperature_data['temperature'], line_width=2)
-        p = self._indicate_experiment_times(p)
-        show(p)
-        del p
+        temperature_plot = figure(title="Detector Temperature", x_axis_label='Time', y_axis_label='Temp (C)', x_axis_type='datetime')
+        temperature_plot.line(times_datetime, self.data.temperature_data['temperature'], line_width=2)
+        temperature_plot = self._indicate_experiments(temperature_plot)
 
         # Make Distance and Doppler plot
         times_datetime = self._convert_to_datetime(self.data.distance_data['time'])
-        p = figure(title="Distance and Doppler", x_axis_label='Time', y_axis_label='Distance', x_axis_type='datetime')
-        p.line(times_datetime, self.data.distance_data['distance'], line_width=2)
-        p.line(times_datetime, self.data.distance_data['doppler'], line_width=2)
-        p = self._indicate_experiment_times(p)
-        show(p)
-        del p
+        distance_plot = figure(title="Distance Correction and Doppler Factor", x_axis_label='Time', y_axis_label='Distance', x_axis_type='datetime')
+        distance_plot.line(times_datetime, self.data.distance_data['distance_correction'], line_width=2)
+        distance_plot.line(times_datetime, self.data.distance_data['doppler_factor'], line_width=2)
+        distance_plot = self._indicate_experiments(distance_plot)
 
         # Make Grating Position plot
         times_datetime = self._convert_to_datetime(self.data.grating_data['time'])
-        p = figure(title="Grating Position", x_axis_label='Time', y_axis_label='Grating Position', x_axis_type='datetime')
-        p.line(times_datetime, self.data.grating_data['grating_position'], line_width=2)
-        p = self._indicate_experiment_times(p)
-        show(p)
-        del p
+        grating_position_plot = figure(title="Grating Position", x_axis_label='Time', y_axis_label='Grating Position', x_axis_type='datetime')
+        grating_position_plot.line(times_datetime, self.data.grating_data['grating_position'], line_width=2)
+        grating_position_plot = self._indicate_experiments(grating_position_plot)
 
         # Make Counts plot
-        p = figure(title="Counts", x_axis_label='Time', y_axis_label='Counts', x_axis_type='datetime')
-        p.line(times_datetime, self.data.grating_data['counts'], line_width=2)
-        p = self._indicate_experiment_times(p)
-        show(p)
-        del p
+        counts_plot = figure(title="Counts", x_axis_label='Time', y_axis_label='Counts', x_axis_type='datetime')
+        counts_plot.line(times_datetime, self.data.grating_data['counts'], line_width=2)
+        counts_plot = self._indicate_experiments(counts_plot)
 
         # Make Integration Time plot
         times_datetime = self._convert_to_datetime(self.data.integration_data['time'])
-        p = figure(title="Integration Time", x_axis_label='Time', y_axis_label='Integration Time (milli-seconds)', x_axis_type='datetime')
-        p.line(times_datetime, self.data.integration_data['integration_time'], line_width=2)
-        p = self._indicate_experiment_times(p)
-        show(p)
-        del p
+        integration_time_plot = figure(title="Integration Time", x_axis_label='Time', y_axis_label='Integration Time (milli-seconds)', x_axis_type='datetime')
+        integration_time_plot.line(times_datetime, self.data.integration_data['integration_time'], line_width=2)
+        integration_time_plot = self._indicate_experiments(integration_time_plot)
 
         # Make Reference Spectrum plot
-        p = figure(title="Reference Spectra", x_axis_label='Wavelength (nm)', y_axis_label='Irradiance (watts/m^2/nm)')
-        p.line(self.data.reference_spectrum_data['wavelength'], self.data.reference_spectrum_data['irradiance'], line_width=2)
-        show(p)
-        del p
+        reference_plot = figure(title="Reference Spectra", x_axis_label='Wavelength (nm)', y_axis_label='Irradiance (watts/m^2/nm)')
+        reference_plot.line(self.data.reference_spectrum_data['wavelength'], self.data.reference_spectrum_data['irradiance'], line_width=2)
 
+        grid = gridplot([[temperature_plot, distance_plot, grating_position_plot],
+                         [counts_plot, integration_time_plot, reference_plot]], width=500, height=500)
+        show(grid)
+
+    def make_plots_results(self):
+        """
+        """
+
+        pass
 
 if __name__ == '__main__':
 
     irradiance_exercise = IrradianceExercise()
-    irradiance_exercise.make_plots()
+    irradiance_exercise.make_plots_raw_data()
     irradiance_exercise.calculate_wavelengths()
     irradiance_exercise.calculate_energyPerPhoton()
     irradiance_exercise.calculate_count_rate()
@@ -330,3 +344,4 @@ if __name__ == '__main__':
     irradiance_exercise.calculate_median_dark_count_rate()
     irradiance_exercise.calculate_photonsPerSecondPerM2()
     irradiance_exercise.calculate_irradiance()
+    irradiance_exercise.make_plots_results()
