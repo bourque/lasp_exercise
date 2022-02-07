@@ -47,6 +47,30 @@ conda create -n <env_name> -f environment.yml
 
 where `<env_name>` is the name you wish to call the environment.
 
+To run the software from the command line, run:
+
+```
+python exercise.py
+```
+
+To run the software from within a python interpreter:
+
+```python
+ie = IrradianceExercise()
+ie.get_data()
+ie.make_plots_input_data()
+ie.run_calculations()
+ie.make_plots_results()
+```
+
+Successful execution of the software will result in the creation of three plots:
+
+- `instrument_data.html`
+- `irradiance.html`
+- `irradiance_ratios.html`
+
+These plots are further described in the [results](#results) section.
+
 ## Data <a name="data"></a>
 
 Several collections of data were used to perform this exercise.  Data are provided in various CSV files (described below).
