@@ -39,7 +39,7 @@ acquire/install it can be found here:
 - [Miniconda](https://conda.io/miniconda.html) or
 - [Anaconda](https://www.continuum.io/downloads)
 
-With `conda` is installed, users can install the environment by running:
+With `conda` installed, users can install the environment by running:
 
 ```
 conda create -n <env_name> -f environment.yml
@@ -69,7 +69,7 @@ spectrum.  This spectrum is used to compare results of the experiment to.
 
 The plot below shows the values of the data described above over time or wavelength.  The green, gray, and red shaded
 regions signify the time coverage of the DownScan, Dark, and UpScan experiments, respectively.  You may click on the plot
-in order to expand it.
+in order to expand it in a new window.
 
 <p align="center">
   <img src="plots/instrument_data.png"/>
@@ -98,7 +98,7 @@ the UpScan irradiances and the reference spectrum (red).  This is also shown ove
 The following points describe some of the design decisions that I made when writing the software to support this exercise:
 
 - I chose Python as the primary programming language to work on this exercise, as this is the language I am most comfortable with
-and use on a day-to-day basis.  Python is a popular, well supported, modern, open-source language, and has many useful third-party libraries to help manage and store data/information (e.g. `pandas`), perform scientific calculations (e.g. `numpy`), and visualize results (e.g. `matplotlib` or `bokeh`).  Because Python is an interpreted, dynamically typed language, it tends to perform slower than other languages such as `C`, however, since this exercise is rather small-scale (i.e. not dealing with a lot of data) and scince results need not be computed in a real-time environment, speed is not really a concern.
+and use on a day-to-day basis.  Python is a popular, well-supported, modern, open-source language, and has many useful third-party libraries to help manage and store data/information (e.g. `pandas`), perform scientific calculations (e.g. `numpy`), and visualize results (e.g. `matplotlib` or `bokeh`).  Because Python is an interpreted, dynamically-typed language, it tends to perform slower than other languages such as `C`, however, since this exercise is rather small-scale (i.e. not dealing with a lot of data) and scince results need not be computed in a real-time environment, speed is not really a concern.
 
 - I used an object-oriented approach within the Python code.  The code utilizes a class (which I called
 `IrradianceExercise`) and utilizes attributes and methods to complete the exercise as opposed to a functional approach that
@@ -108,21 +108,20 @@ constants, I decided to store these components within the class object itself (i
 accessed across different methods.
 
 - I split up the various calculations into their own methods (e.g. `calculate_wavelength`, `calculate_count_rate`, etc.) as I
-believe this makes the code more readable overall.  That is, it should be relatively obvious what a particular method's purpose is just from a a quick glance.  I also created separate methods for strictly plotting purposes, as well as reading in and
+believe this makes the code more readable overall.  That is, it should be relatively obvious what a particular method's purpose is just from a quick glance.  I also created separate methods for strictly plotting purposes, as well as reading in and
 organizing the data.
 
 - I named some of the methods using a leading underscore (e.g. `_convert_to_datetime`) to indicate that these methods are only used
-'internally' within the class object.  In other words, these methods do not get called directly, rather they get called by _other methods within the class_.  While this does not change the behavior of the method in any way, not make the method private, it
+'internally' within the class object.  In other words, these methods do not get called directly, rather they get called by _other methods within the class_.  While this does not change the behavior of the method in any way, nor make the method private, it
 is considered a good practice.
 
 - I followed the [`PEP08`](https://www.python.org/dev/peps/pep-0008/) style guide and
 [`PEP257`](https://www.python.org/dev/peps/pep-0257/) docstring conventions (with only a few exceptions) in order to make the code
-more readable and standardized.  This helps for other developer to be able to read, understand, and perhaps maintain or contribute
+more readable and standardized.  This helps for other developers to be able to read, understand, and perhaps maintain or contribute
 to the code in the future.  These conventions include standardized class/method/variable naming conventions, alphabetical ordering
 of methods, consistently structured docstrings, and more.  One major exception to this is that I did not follow the convention of
 limiting lines of code to 80 characters, as I find this convention to be a bit antiquated (we no longer use punch cards) and in
-many cases will cause the code to be _less_ readable.  I did however split up lines of code that were exceptionally long (\~120
-characters).
+many cases will cause the code to be _less_ readable.  I did however split up lines of code that were exceptionally long (i.e. ones that were \~120 characters or more).
 
 - I chose the `pandas` library for reading in and storing data from CSV files. After reading in data, `pandas` automatically stores
 the data in a table-like object, and columns of data can be easily accessed through attributes.
@@ -180,9 +179,9 @@ correction is needed.
 
 ## Potential Improvements <a name="improvements"></a>
 
-Given some more time, there are several improvements that could be made to this software:
+Given more time, there are several improvements that could be made to this software:
 
-- The code could be made more DRY (i.e. Don't Repeat Yourself) in that there is a lot of repeated code for DownScan and UpScan experiments.  This could be avoided by modifying the design to allow an experiment (i.e. `experiment_name`,
+- The code could be made more D.R.Y. (Don't Repeat Yourself) in that there is a lot of repeated code for DownScan and UpScan experiments.  This could be avoided by modifying the design to allow an experiment (i.e. `experiment_name`,
 `experiment_start_time`, `experiment_end_time`) to be a variable component.
 
 - Unit and/or regression tests could be developed that test most, if not all methods of the `IrradianceExercise` class.
@@ -193,13 +192,13 @@ handling).  Such checks could be added to make sure that data flows through the 
 conditions are met.
 
 - The software could be made into an installable package by restructuring the repository, adding appropriate `__init__.py`
-files, and adding a `setup.py` file.  This could make the installation of the software easier (e.g. a simple `pip install`).
+files, and adding a `setup.py` file.  This could make the installation of the software easier (e.g. a simple `pip install .`).
 
 - Additional plots, tables, and/or output messages could be added throughout the exercise in order to check that
 individual calculations (.e.g. `calculate_count_rate`) yield their expected results.
 
 
-## Conclusion
+## Final Note
 
-I would like to thank the folks at LASP for the opportunity to showcase my work.  It had been quite some time since i've thought
-about some of these equations (probably since my time at Florida Tech in ~2010).  It was fun to apply that knowledge again!
+I would like to thank the folks at LASP for the opportunity to showcase my work.  It had been quite some time since I've thought
+about some of these equations (probably since my time at Florida Tech in ~2010); it was fun to apply that knowledge again!
