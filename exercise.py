@@ -20,6 +20,9 @@ contain three plots:
       DownScan experiments along with the reference spectrum
     - irradiance_ratios.html : plots the ratio of the UpScan and
       DownScan experiements with respect to the reference spectrum
+    - reference_spectrum_fit.html : plots the gaussian fit of the
+      Downscan, Upscan, and reference spectrum, which was used to shift
+      the wavelength to align with the reference spectrum
 
 Use
 ---
@@ -36,7 +39,8 @@ Use
         ie.get_data()
         ie.make_plots_input_data()
         ie.run_calculations()
-        ie.make_results_plots()
+        ie.shift_wavelength()
+        ie.make_plots_results()
 
     It is required that a 'data/' directory exists in the working
     directory, and it contains the following data files:
@@ -67,11 +71,12 @@ Dependencies
     - bokeh
     - numpy
     - pandas
+    - scipy
 
     The user may utilize the provided 'requirements.txt' and/or
     'environment.yml' files to create the necessary software
     environment to run the code.  More details about this are provided
-    in the README
+    in the README.
 """
 
 from collections import namedtuple
@@ -463,7 +468,7 @@ class IrradianceExercise():
         save(grid)
         print(f'\tPlot saved to {filename}')
 
-    def make_results_plots(self):
+    def make_plots_results(self):
         """Create bokeh plots showing results of the exercise"""
 
         # Plot irradiance near ~180nm emission lines
@@ -575,4 +580,4 @@ if __name__ == '__main__':
     ie.make_plots_input_data()
     ie.run_calculations()
     ie.shift_wavelengths()
-    ie.make_results_plots()
+    ie.make_plots_results()
