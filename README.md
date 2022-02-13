@@ -60,6 +60,7 @@ ie = IrradianceExercise()
 ie.get_data()
 ie.make_plots_input_data()
 ie.run_calculations()
+ie.shift_wavelengths()
 ie.make_plots_results()
 ```
 
@@ -68,6 +69,7 @@ Successful execution of the software will result in the creation of three plots:
 - `instrument_data.html`
 - `irradiance.html`
 - `irradiance_ratios.html`
+- `reference_spectrum_fit.html`
 
 These plots are further described in the [results](#results) section.
 
@@ -101,10 +103,20 @@ in order to expand it in a new window.
 
 ## Results <a name="results"></a>
 
-The following plot shows the irradiance (in watts/m<sup>2</sup>/nm) for the DownScan (green) and UpScan (red) over a
-wavelength range of 180nm -183 nm.  This wavelength range was chosen to showcase the two emission lines located near \~180 nm.
-The values provided are irradiances as they would be measured from a distance of 1AU.  The plot also displays the
-reference spectrum (black).
+The following plot displays the reference spectrum (black), DownScan (green) and UpScan (red) irradiances (in
+watts/m<sup>2</sup>/nm) around the emission line located near \~181.7 nm.  Also plotted (in dashed lines) are the
+gaussian fits that were used to determine the wavelengths of max irradiance for each spectra; the difference between
+the DownScan and UpScan wavelengths relative to the reference spectra were then used to shift the calculated
+DownScan/UpScan wavelengths to align with the reference spectra.
+
+<p align="center">
+  <img src="plots/reference_spectrum_fit.png"/>
+</p>
+
+The next plot shows the irradiance (in watts/m<sup>2</sup>/nm) for the DownScan (green) and UpScan (red) over the
+wavelength range of 180nm -183 nm.  This wavelength range was chosen to showcase the two emission lines located
+near \~180 nm.  The values provided are irradiances as they would be measured from a distance of 1AU.  The plot
+also displays the reference spectrum (black).
 
 <p align="center">
   <img src="plots/irradiance.png"/>
@@ -190,11 +202,6 @@ difficulty when applying the correction to the count rate to account for changes
 Though the differences in times are quite small, this introduces some uncertainty in the count rate, since the applied temperature
 correction will be somewhat innaccurate.  Perhaps there is a better or more accurate way to apply the temperature correction that
 I overlooked; given more time, it would be worth exploring other ways to more accurately correct for temperature differences.
-
-- Much like the temperature correction discrepancy mentioned in the last point, there is a discrepancy between the wavelengths
-calculated from the grating positions and the wavelengths given in the reference spectrum data.  This poses a problem when
-trying to calculate the ratio of irradiances between the UpScan/DownScan and the reference spectrum.  To get around this, I
-found the reference spectrum wavelength that matched the grating position wavelength the closest.
 
 - The instructions mention a "ConstantWavelength" experiment, but the experiment is not listed in `plans.txt` as an experiment
 that was performed.  I assume that this was mentioned in the instructions as a means to describe how and why the temperature

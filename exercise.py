@@ -20,6 +20,9 @@ contain three plots:
       DownScan experiments along with the reference spectrum
     - irradiance_ratios.html : plots the ratio of the UpScan and
       DownScan experiements with respect to the reference spectrum
+    - reference_spectrum_fit.html : plots the gaussian fit of the
+      Downscan, Upscan, and reference spectrum, which was used to shift
+      the wavelength to align with the reference spectrum
 
 Use
 ---
@@ -36,6 +39,7 @@ Use
         ie.get_data()
         ie.make_plots_input_data()
         ie.run_calculations()
+        ie.shift_wavelength()
         ie.make_plots_results()
 
     It is required that a 'data/' directory exists in the working
@@ -67,11 +71,12 @@ Dependencies
     - bokeh
     - numpy
     - pandas
+    - scipy
 
     The user may utilize the provided 'requirements.txt' and/or
     'environment.yml' files to create the necessary software
     environment to run the code.  More details about this are provided
-    in the README
+    in the README.
 """
 
 from collections import namedtuple
@@ -79,9 +84,10 @@ import datetime
 
 from bokeh.layouts import gridplot
 from bokeh.models import BoxAnnotation, NumeralTickFormatter
-from bokeh.plotting import figure, output_file, save
+from bokeh.plotting import figure, output_file, save, show
 import numpy as np
 import pandas
+from scipy.optimize import curve_fit
 
 
 class IrradianceExercise():
@@ -339,7 +345,7 @@ class IrradianceExercise():
             stepSize = 2.4237772022101214E-6 [rad]
 
         A correction is applied to the wavelength to take the changing
-        velocity of the spacecraft account.
+        velocity of the spacecraft into account.
         """
 
         # Calculate angle of incidence
@@ -510,6 +516,62 @@ class IrradianceExercise():
         self.calculate_photons_per_second_per_m2()
         self.calculate_irradiance()
 
+    def shift_wavelengths(self):
+        """Perform a fit and an interpolation of the reference spectrum
+        and shift the measured wavelengths to match the spectrum
+        """
+
+        # Define gaussian function used for fitting
+        def gauss(x, a, x0, sigma):
+            return a*np.exp(-(x-x0)**2/(2*sigma**2))
+
+        # Use subsets of data around the ~181.7 nm emission line
+        ref_subset = self.data.reference_spectrum_data[self.data.reference_spectrum_data['wavelength'].between(181.62, 181.78)]
+        ref_subset_wavelength, ref_subset_irradiance = ref_subset['wavelength'].values, ref_subset['irradiance'].values
+        downscan_subset_wavelength = self.results.wavelengths_downscan[np.where((self.results.wavelengths_downscan >= 181.63) & (self.results.wavelengths_downscan <= 181.80))]
+        downscan_subset_irradiance = self.results.irradiance_downscan[np.where((self.results.wavelengths_downscan >= 181.63) & (self.results.wavelengths_downscan <= 181.80))]
+        upscan_subset_wavelength = self.results.wavelengths_upscan[np.where((self.results.wavelengths_upscan >= 181.64) & (self.results.wavelengths_upscan <= 181.82))]
+        upscan_subset_irradiance = self.results.irradiance_upscan[np.where((self.results.wavelengths_upscan >= 181.64) & (self.results.wavelengths_upscan <= 181.82))]
+
+        # Use the max values as a proxy for initial guesses
+        guess_ref = ref_subset_wavelength[np.argmax(ref_subset_irradiance)]
+        guess_downscan = downscan_subset_wavelength[np.argmax(downscan_subset_irradiance)]
+        guess_upscan = upscan_subset_wavelength[np.argmax(upscan_subset_irradiance)]
+
+        # Fit a guassian to the emission line
+        params_ref, _ = curve_fit(gauss, ref_subset_wavelength, ref_subset_irradiance, p0=[0.1, guess_ref, 0.1])
+        fit_ref = gauss(ref_subset_wavelength, params_ref[0], params_ref[1], params_ref[2])
+        params_downscan, _ = curve_fit(gauss, downscan_subset_wavelength, downscan_subset_irradiance, p0=[0.1, guess_downscan, 0.1])
+        fit_downscan = gauss(downscan_subset_wavelength, params_downscan[0], params_downscan[1], params_downscan[2])
+        params_upscan, _ = curve_fit(gauss, upscan_subset_wavelength, upscan_subset_irradiance, p0=[0.1, guess_upscan, 0.1])
+        fit_upscan = gauss(upscan_subset_wavelength, params_upscan[0], params_upscan[1], params_upscan[2])
+
+        # Find the wavelength at the peak of the emission line
+        wavelength_at_peak_reference = ref_subset_wavelength[np.argmax(fit_ref)]
+        wavelength_at_peak_downscan = downscan_subset_wavelength[np.argmax(fit_downscan)]
+        wavelength_at_peak_upscan = upscan_subset_wavelength[np.argmax(fit_upscan)]
+
+        # Find the differences between peaks
+        downscan_shift = wavelength_at_peak_downscan - wavelength_at_peak_reference
+        upscan_shift = wavelength_at_peak_upscan - wavelength_at_peak_reference
+
+        # Plot the fits for visual inspection
+        p = figure(title="Irradiance at 1AU", x_axis_label='Wavelength (nm)', y_axis_label='Irradiance (watts/m^2/nm)', x_range=(181.5, 181.9))
+        p.line(self.data.reference_spectrum_data['wavelength'], self.data.reference_spectrum_data['irradiance'], line_width=2, line_color='black', legend_label='Reference')
+        p.line(ref_subset_wavelength, fit_ref, line_width=1, color='black', line_dash='dashed', legend_label='Reference fit')
+        p.line(self.results.wavelengths_downscan, self.results.irradiance_downscan, line_width=2, color='green', legend_label='Downscan')
+        p.line(downscan_subset_wavelength, fit_downscan, line_width=1, color='green', line_dash='dashed', legend_label='Downscan fit')
+        p.line(self.results.wavelengths_upscan, self.results.irradiance_upscan, line_width=2, color='red', legend_label='Upscan')
+        p.line(upscan_subset_wavelength, fit_upscan, line_width=1, color='red', line_dash='dashed', legend_label='Upscan fit')
+        filename = 'plots/reference_spectrum_fit.html'
+        output_file(filename=filename)
+        save(p)
+        print(f'\tPlot saved to {filename}')
+
+        # Apply wavelength shift
+        self.results.wavelengths_downscan -= downscan_shift
+        self.results.wavelengths_upscan -= upscan_shift
+
 
 if __name__ == '__main__':
 
@@ -517,4 +579,5 @@ if __name__ == '__main__':
     ie.get_data()
     ie.make_plots_input_data()
     ie.run_calculations()
+    ie.shift_wavelengths()
     ie.make_plots_results()
